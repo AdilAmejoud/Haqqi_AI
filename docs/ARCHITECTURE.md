@@ -72,7 +72,7 @@ Haqqi_AI/ ← GitHub repo root
 ## 3. Frontend Architecture ✅
 
 ### Folder Structure
-
+```text
 frontend/
 ├── src/
 │ ├── components/
@@ -111,7 +111,7 @@ frontend/
 ├── tailwind.config.js
 ├── tsconfig.json
 └── .env.example
-
+```
 ### Auth Flow
 
 User opens app
@@ -214,7 +214,7 @@ added_at timestamptz
 > This section will be completed by the Backend Lead when the Django project is pushed to `backend/`.
 
 ### Expected Structure
-
+```text
 backend/
 ├── manage.py
 ├── requirements.txt
@@ -229,7 +229,7 @@ backend/
 │ ├── urls.py
 │ └── models.py
 └── README.md
-
+```
 ### Expected API Endpoints
 
 POST /api/chat/ ← Send message, get AI response
@@ -273,7 +273,7 @@ Response with Citations
 (article number + law name)
 
 ### Expected Folder Structure
-
+```text
 ai/
 ├── requirements.txt
 ├── .env.example
@@ -285,7 +285,7 @@ ai/
 ├── data/
 │ └── laws/ ← Moroccan law documents (PDF/text)
 └── README.md
-
+```
 ---
 
 ## 7. CI/CD Pipeline 🔲 _(Planned)_
@@ -318,7 +318,7 @@ jobs:
 ---
 
 ## 8. Environment Variables
-
+```text
 ### frontend/.env.local
 
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -339,7 +339,7 @@ GEMINI_API_KEY=
 PINECONE_API_KEY=
 PINECONE_INDEX=haqqi-legal
 PINECONE_ENVIRONMENT=
-
+```
 ---
 
 ## 9. Team Responsibilities
