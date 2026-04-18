@@ -164,6 +164,7 @@ Haqqi_AI/
 ├── backend/ # FastAPI + RAG pipeline
 ├── docs/ # Architecture and API docs
 └── README.md
+```
 
 ---
 
