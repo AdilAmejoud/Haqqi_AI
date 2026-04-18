@@ -1,0 +1,35 @@
+/* ChatScreen.module.css */
+
+/* Quick chips bar */
+.quickChipsBar {
+  position: absolute;
+  bottom: 88px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: 4px;
+  pointer-events: none;
+}
+
+.quickChipsContainer {
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.quickChipsContainer::-webkit-scrollbar {
+  display: none;
+}
+
+.quickChipsContainer {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
