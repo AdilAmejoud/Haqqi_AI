@@ -16,9 +16,15 @@
 }
 
 @theme {
-  --color-primary: var(--color-gold);
+  --color-primary: #C9A84C;
   --font-sans: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', ui-sans-serif, system-ui;
 }
+
+/* Status Dots */
+.dot-new { background-color: #1B3A6B; }
+.dot-active { background-color: #C9A84C; }
+.dot-completed { background-color: #1D9E75; }
+.dot-archived { background-color: #888780; }
 
 body {
   background-color: var(--color-bg);
@@ -26,12 +32,12 @@ body {
 }
 
 /* Custom Utilities */
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
 .scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;    /* Firefox and Standard */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;            /* Chrome, Safari and Opera */
 }
 
 @layer base {
