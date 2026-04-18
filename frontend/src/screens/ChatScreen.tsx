@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Scale, 
   Paperclip, 
@@ -16,9 +17,13 @@ import {
   KeyRound,
   UsersRound,
   MessageSquareText,
-  Paperplane
+  Plus,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { Profile } from '../types';
+import { Profile, Conversation, Message as DBMessage } from '../types';
+import { supabase } from '../utils/supabase/client';
+import { getSystemPrompt } from '../utils/supabase/getSystemPrompt';
 
 interface Message {
   id: string;
@@ -49,32 +54,121 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [reasoningStep, setReasoningStep] = useState(0);
-  const [messages, setMessages] = useState<Message[]>([]);
+  
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<DBMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.conversationId) {
+      setSelectedConvId(location.state.conversationId);
+    }
+  }, [location.state]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
+    async function loadConversations() {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false });
+      
+      setConversations(data ?? []);
+      setLoading(false);
+    }
+    loadConversations();
+  }, []);
+
+  useEffect(() => {
+    if (selectedConvId) {
+      loadMessages(selectedConvId);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedConvId]);
+
+  async function loadMessages(convId: string) {
+    setLoadingMessages(true);
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true });
+    setMessages(data ?? []);
+    setLoadingMessages(false);
+  }
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const handleSend = (text: string = inputText, attachment?: Message['attachment']) => {
-    if (!text.trim() && !attachment) return;
+  const handleSend = async (text: string = inputText) => {
+    if (!text.trim()) return;
 
-    const newUserMsg: Message = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text,
-      time: new Date().toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' }),
-      attachment,
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    let convId = selectedConvId;
+
+    // Create conversation on first message
+    if (!convId) {
+      const { data: conv, error } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: user.id,
+          title: text.slice(0, 60),
+          topic: 'general'
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating conversation:', error);
+        return;
+      }
+      convId = conv.id;
+      setSelectedConvId(convId);
+      setConversations(prev => [conv, ...prev]);
+    }
+
+    // Save user message
+    const userMsg = {
+      conversation_id: convId,
+      role: 'user' as const,
+      content: text,
     };
 
-    setMessages((prev) => [...prev, newUserMsg]);
+    const { data: savedUserMsg } = await supabase
+      .from('messages')
+      .insert(userMsg)
+      .select()
+      .single();
+
+    if (savedUserMsg) {
+      setMessages(prev => [...prev, savedUserMsg]);
+    }
+
     setInputText('');
     setIsTyping(true);
     setReasoningStep(0);
@@ -84,15 +178,23 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
       setReasoningStep(1);
       setTimeout(() => {
         setReasoningStep(2);
-        setTimeout(() => {
-          const aiResponseText = 'أهلاً بك. أنا مساعدك القانوني الذكي. كيف يمكنني مساعدتك في استشارتك اليوم؟ يمكنك طرح سؤالك بالدارجة المغربية أو العربية الفصحى.';
-          const newAiMsg: Message = {
-            id: (Date.now() + 1).toString(),
-            sender: 'ai',
-            text: aiResponseText,
-            time: new Date().toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' }),
+        setTimeout(async () => {
+          const aiResponseText = 'أهلاً بك. أنا مساعدك القانوني الذكي. كيف يمكنني مساعدتك في استشارتك اليوم؟';
+          const aiMsg = {
+            conversation_id: convId as string,
+            role: 'assistant' as const,
+            content: aiResponseText,
           };
-          setMessages((prev) => [...prev, newAiMsg]);
+
+          const { data: savedAiMsg } = await supabase
+            .from('messages')
+            .insert(aiMsg)
+            .select()
+            .single();
+
+          if (savedAiMsg) {
+            setMessages(prev => [...prev, savedAiMsg]);
+          }
           setIsTyping(false);
         }, 1000);
       }, 1000);
@@ -104,14 +206,57 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
   return (
     <div className="flex flex-col h-[calc(100vh-160px)] max-w-4xl mx-auto bg-white rounded-3xl border border-[#E5E7EB] shadow-sm overflow-hidden" dir="rtl">
       
+      {/* Header Bar */}
+      <div className="px-6 py-4 border-b border-[#F3F4F6] flex items-center justify-between bg-white flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-[#E8EEF7] rounded-lg flex items-center justify-center">
+            <Gavel size={16} className="text-[#1B3A6B]" strokeWidth={2} />
+          </div>
+          <span className="text-sm font-black text-[#1F2937]">دردشة حقي AI</span>
+        </div>
+        
+        <button
+          onClick={() => navigate('/chats')}
+          className="flex items-center gap-1.5 text-xs font-bold text-[#6B7280] hover:text-[#1B3A6B] transition-colors"
+        >
+          <span>كل المحادثات</span>
+          <ChevronRight size={16} strokeWidth={2} />
+        </button>
+      </div>
+
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {isEmpty ? (
+        {loadingMessages ? (
+          <div className="h-full flex flex-col items-center justify-center">
+            <Loader size={24} className="animate-spin text-[#1B3A6B]" />
+            <p className="mt-2 text-xs text-[#6B7280]">جاري تحميل المحادثة...</p>
+          </div>
+        ) : isEmpty ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-[#1B3A6B] to-[#2D4E87] rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-[#1B3A6B]/20 rotate-3">
               <Gavel size={36} className="text-white" strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-bold text-[#1F2937] mb-2">مرحباً {profile?.full_name}</h2>
+            
+            {/* Recent Conversations Selection if empty */}
+            {conversations.length > 0 && (
+              <div className="mb-8 w-full max-w-md">
+                <p className="text-[10px] uppercase tracking-widest text-[#9CA3AF] font-bold mb-4">محادثاتك الأخيرة</p>
+                <div className="flex flex-col gap-2">
+                  {conversations.slice(0, 3).map(conv => (
+                    <button
+                      key={conv.id}
+                      onClick={() => setSelectedConvId(conv.id)}
+                      className="w-full p-3 bg-white border border-[#E5E7EB] rounded-xl hover:border-[#1B3A6B] text-right flex items-center justify-between group"
+                    >
+                      <ChevronLeft size={14} className="text-[#E5E7EB] group-hover:text-[#1B3A6B]" />
+                      <span className="text-sm text-[#1F2937] truncate">{conv.title || 'محادثة بدون عنوان'}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <p className="text-[#6B7280] text-sm mb-10 max-w-xs mx-auto">أنا هنا لمساعدتك في أي تساؤل قانوني مغربي. كيف أبدأ معك اليوم؟</p>
             <div className="grid grid-cols-2 gap-3 w-full max-w-md">
               {QUICK_CHIPS.map((chip, idx) => (
@@ -131,16 +276,16 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
         ) : (
           <>
             {messages.map((msg) => (
-              <div key={msg.id} className={`flex w-full ${msg.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[80%] flex flex-col ${msg.sender === 'user' ? 'items-start' : 'items-end'}`}>
+              <div key={msg.id} className={`flex w-full ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
+                <div className={`max-w-[80%] flex flex-col ${msg.role === 'user' ? 'items-start' : 'items-end'}`}>
                   <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                    msg.sender === 'user' 
+                    msg.role === 'user' 
                       ? 'bg-[#1B3A6B] text-white rounded-tr-none' 
                       : 'bg-[#F7F8FA] text-[#1F2937] border border-[#E5E7EB] rounded-tl-none'
                   }`}>
-                    {msg.text}
+                    {msg.content}
                   </div>
-                  <span className="text-[10px] text-[#9CA3AF] mt-1 px-1">{msg.time}</span>
+                  <span className="text-[10px] text-[#9CA3AF] mt-1 px-1">{new Date(msg.created_at).toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
             ))}
@@ -179,6 +324,15 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
               dir="rtl"
             />
             <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {selectedConvId && (
+                <button 
+                  onClick={() => setSelectedConvId(null)}
+                  className="p-2 text-[#6B7280] hover:text-[#1B3A6B] transition-colors" 
+                  title="محادثة جديدة"
+                >
+                  <Plus size={20} strokeWidth={1.5} />
+                </button>
+              )}
               <button className="p-2 text-[#6B7280] hover:text-[#1B3A6B] transition-colors" title="تسجيل صوتي"><Mic size={20} strokeWidth={1.5} /></button>
               <button className="p-2 text-[#6B7280] hover:text-[#1B3A6B] transition-colors" title="إرفاق ملف"><Paperclip size={20} strokeWidth={1.5} /></button>
             </div>
