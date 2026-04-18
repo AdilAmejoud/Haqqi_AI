@@ -7,10 +7,14 @@ import {
   Car,
   Heart,
   ChevronLeft,
-  Phone
+  Phone,
+  MessageSquare,
+  Plus
 } from 'lucide-react';
-import { Profile } from '../../types';
+import { Profile, Conversation } from '../../types';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../utils/supabase/client';
+import { useState, useEffect } from 'react';
 
 interface CitizenDashboardProps {
   greeting: string;
@@ -29,6 +33,25 @@ const TopicCard = ({ icon: Icon, title, sub }: { icon: any, title: string, sub: 
 
 export default function CitizenDashboard({ greeting, profile }: CitizenDashboardProps) {
   const navigate = useNavigate();
+  const [recentChats, setRecentChats] = useState<Conversation[]>([]);
+  const [chatsLoading, setChatsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadRecentChats() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      setRecentChats(data ?? []);
+      setChatsLoading(false);
+    }
+    loadRecentChats();
+  }, []);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6" dir="rtl">
@@ -74,6 +97,63 @@ export default function CitizenDashboard({ greeting, profile }: CitizenDashboard
               <ChevronLeft size={16} className="text-[#6B7280] group-hover:text-[#1B3A6B] transition-transform group-hover:-translate-x-1" />
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Recent Chats Section */}
+      <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-[#C9A84C]" />
+            <span className="text-sm font-bold text-[#1F2937]">محادثاتك مع حقي</span>
+          </div>
+          <div className="flex items-center gap-3">
+             <button 
+              onClick={() => navigate('/chat')}
+              className="text-[10px] font-black text-[#1B3A6B] bg-[#E8EEF7] px-3 py-1.5 rounded-lg hover:bg-[#1B3A6B] hover:text-white transition-all flex items-center gap-1.5"
+            >
+              <Plus size={12} strokeWidth={3} />
+              جديدة
+            </button>
+            <button 
+              onClick={() => navigate('/chats')}
+              className="text-xs text-[#6B7280] hover:text-[#1B3A6B] flex items-center gap-1 transition-colors"
+            >
+              <span>الكل</span>
+              <ChevronLeft size={12} />
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          {chatsLoading ? (
+            Array(3).fill(0).map((_, i) => (
+              <div key={i} className="py-3 flex justify-between items-center animate-pulse">
+                <div className="h-4 bg-gray-100 rounded w-1/2" />
+                <div className="h-3 bg-gray-50 rounded w-12" />
+              </div>
+            ))
+          ) : recentChats.length === 0 ? (
+            <p className="text-xs text-[#6B7280] text-center py-4 bg-[#F7F8FA] rounded-xl border border-dashed border-[#E5E7EB]">لا توجد محادثات بعد</p>
+          ) : (
+            recentChats.map(chat => (
+              <div 
+                key={chat.id}
+                onClick={() => navigate('/chat', { state: { conversationId: chat.id } })}
+                className="flex items-center justify-between py-3 border-b border-[#F3F4F6] last:border-b-0 cursor-pointer hover:bg-[#F7F8FA] -mx-5 px-5 transition-colors group"
+              >
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={14} className="text-[#9CA3AF] group-hover:text-[#1B3A6B] transition-colors" />
+                  <span className="text-sm text-[#1F2937] group-hover:text-[#1B3A6B] transition-colors truncate max-w-[200px]">
+                    {chat.title || 'محادثة بدون عنوان'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#6B7280]">
+                  {new Date(chat.created_at).toLocaleDateString('ar-MA', { day: 'numeric', month: 'short' })}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
