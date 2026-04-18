@@ -145,7 +145,7 @@ case_documents    -- junction table linking cases to documents
 
 All tables use **Row Level Security (RLS)** — users can only access their own data.
 
----
+```text
 
 ## 📁 Project Structure
 
