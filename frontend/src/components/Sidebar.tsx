@@ -23,10 +23,11 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { path: '/dashboard',  label: 'الرئيسية',     icon: Home },
-  { path: '/chat',       label: 'المحادثات',    icon: MessageSquare },
+  { path: '/cases',      label: 'القضايا',      icon: ClipboardList },
+  { path: '/chats',      label: 'المحادثات',    icon: MessageSquare },
   { path: '/library',    label: 'المكتبة',      icon: Library },
   { path: '/document',   label: 'المستندات',    icon: FileText },
-  { path: '/procedures', label: 'المساطر الإدارية', icon: ClipboardList },
+  { path: '/procedures', label: 'المساطر الإدارية', icon: Scale },
   { path: '/community',  label: 'منتدى المجتمع', icon: Users },
   { path: '/settings',   label: 'الإعدادات',    icon: Settings },
 ];
@@ -62,16 +63,23 @@ export default function Sidebar({ isOpen, setIsOpen, profile }: SidebarProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-2">
-            {NAV_ITEMS.map((item) => (
+            {NAV_ITEMS.filter(item => {
+              if (item.path === '/cases' && profile?.legal_level !== 'expert') return false;
+              return true;
+            }).map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={({ isActive }) => `
-                  flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-                  ${isActive
-                    ? 'bg-[#1B3A6B] text-white shadow-md'
-                    : 'text-[#6B7280] hover:bg-[#E8EEF7] hover:text-[#1B3A6B]'}
-                `}
+                className={({ isActive }) => {
+                  const isChatActive = item.path === '/chats' && (window.location.pathname === '/chats' || window.location.pathname === '/chat');
+                  const reallyActive = isActive || isChatActive;
+                  return `
+                    flex items-center gap-3 px-4 py-3 rounded-xl transition-all
+                    ${reallyActive
+                      ? 'bg-[#1B3A6B] text-white shadow-md'
+                      : 'text-[#6B7280] hover:bg-[#E8EEF7] hover:text-[#1B3A6B]'}
+                  `;
+                }}
               >
                 <item.icon size={20} strokeWidth={1.5} />
                 <span className="font-medium text-sm">{item.label}</span>
