@@ -161,7 +161,8 @@ Haqqi_AI/
 │ │ ├── types.ts # TypeScript types
 │ │ └── App.tsx # Router and auth logic
 │ └── .env.example
-├── backend/ # FastAPI + RAG pipeline
+├── backend/ # Django + DRF REST API
+├── ai/ # LangChain + Gemini + Pinecone RAG pipeline
 ├── docs/ # Architecture and API docs
 └── README.md
 
