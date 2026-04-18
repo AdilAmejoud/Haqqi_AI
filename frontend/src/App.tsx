@@ -14,6 +14,11 @@ import SettingsScreen from './screens/SettingsScreen';
 import ProceduresScreen from './screens/ProceduresScreen';
 import DocumentScreen from './screens/DocumentScreen';
 import CommunityScreen from './screens/CommunityScreen';
+import NewCaseScreen from './screens/NewCaseScreen';
+import EditCaseScreen from './screens/EditCaseScreen';
+import CasesListScreen from './screens/CasesListScreen';
+import ChatsListScreen from './screens/ChatsListScreen';
+import CaseWorkspaceScreen from './screens/CaseWorkspaceScreen';
 import AppShell from './components/AppShell';
 
 type ProfileState = Profile | null | 'loading';
@@ -35,6 +40,50 @@ function AuthCallbackRoute() {
   return <Spinner />;
 }
 
+function Shell({ children, noPadding, session, profile, realProfile }: { children: ReactNode, noPadding?: boolean, session: any, profile: ProfileState, realProfile: Profile | null }) {
+  return (
+    <PrivateRoute session={session} profile={profile}>
+      <AppShell profile={realProfile} noPadding={noPadding}>{children}</AppShell>
+    </PrivateRoute>
+  );
+}
+
+function PrivateRoute({ children, session, profile }: { children: ReactNode, session: any, profile: ProfileState }) {
+  if (!session) return <Navigate to="/auth" replace />;
+  if (profile === 'loading') return <Spinner />;
+  if (!profile || !(profile as Profile).onboarding_completed) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  return <>{children}</>;
+}
+
+function RootRoute({ children, session, profile }: { children: ReactNode, session: any, profile: ProfileState }) {
+  if (!session) return <>{children}</>;
+  if (profile === 'loading') return <Spinner />;
+  if (profile && (profile as Profile).onboarding_completed)
+    return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/onboarding" replace />;
+}
+
+function PublicRoute({ children, session, profile }: { children: ReactNode, session: any, profile: ProfileState }) {
+  if (!session) return <>{children}</>;
+  if (profile === 'loading') return <Spinner />;
+  if (profile && (profile as Profile).onboarding_completed)
+    return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/onboarding" replace />;
+}
+
+function OnboardingRoute({ session, profile, setProfile }: { session: any, profile: ProfileState, setProfile: (p: ProfileState) => void }) {
+  if (!session) return <Navigate to="/auth" replace />;
+  if (profile === 'loading') return <Spinner />;
+  if (profile && (profile as Profile).onboarding_completed)
+    return <Navigate to="/dashboard" replace />;
+  return <OnboardingScreen onComplete={async () => {
+    const p = await fetchUserProfile(session.user.id);
+    setProfile(p);
+  }} />;
+}
+
 export default function App() {
   const [session, setSession] = useState<any>(undefined);
   const [profile, setProfile] = useState<ProfileState>('loading');
@@ -42,14 +91,12 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    // ── THE FIX: fetch profile OUTSIDE onAuthStateChange to avoid deadlock ──
     async function loadProfile(userId: string) {
       if (!mounted) return;
       const p = await fetchUserProfile(userId);
       if (mounted) setProfile(p);
     }
 
-    // Step 1: getSession handles the refresh case
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       setSession(session ?? null);
@@ -60,7 +107,6 @@ export default function App() {
       }
     });
 
-    // Step 2: onAuthStateChange is SYNCHRONOUS — no async, no await inside
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
         if (!mounted) return;
@@ -69,7 +115,6 @@ export default function App() {
         setSession(newSession ?? null);
 
         if (newSession) {
-          // ← dispatch OUTSIDE the callback using setTimeout
           setTimeout(() => loadProfile(newSession.user.id), 0);
         } else {
           setProfile(null);
@@ -87,66 +132,30 @@ export default function App() {
     return <Spinner />;
   }
 
-  function RootRoute({ children }: { children: ReactNode }) {
-    if (!session) return <>{children}</>;
-    if (profile === 'loading') return <Spinner />;
-    if (profile && (profile as Profile).onboarding_completed)
-      return <Navigate to="/dashboard" replace />;
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  function PublicRoute({ children }: { children: ReactNode }) {
-    if (!session) return <>{children}</>;
-    if (profile === 'loading') return <Spinner />;
-    if (profile && (profile as Profile).onboarding_completed)
-      return <Navigate to="/dashboard" replace />;
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  function PrivateRoute({ children }: { children: ReactNode }) {
-    if (!session) return <Navigate to="/auth" replace />;
-    if (profile === 'loading') return <Spinner />;
-    if (!profile || !(profile as Profile).onboarding_completed)
-      return <Navigate to="/onboarding" replace />;
-    return <>{children}</>;
-  }
-
-  function OnboardingRoute() {
-    if (!session) return <Navigate to="/auth" replace />;
-    if (profile === 'loading') return <Spinner />;
-    if (profile && (profile as Profile).onboarding_completed)
-      return <Navigate to="/dashboard" replace />;
-    return <OnboardingScreen onComplete={async () => {
-      const p = await fetchUserProfile(session.user.id);
-      setProfile(p);
-    }} />;
-  }
-
   const realProfile = profile !== 'loading' ? profile as Profile | null : null;
 
-  function Shell({ children }: { children: ReactNode }) {
-    return (
-      <PrivateRoute>
-        <AppShell profile={realProfile}>{children}</AppShell>
-      </PrivateRoute>
-    );
-  }
+  console.log('App Rendering — Current Path:', window.location.pathname);
 
   return (
     <Router>
       <Routes>
-        <Route path="/"              element={<RootRoute><LandingScreen /></RootRoute>} />
-        <Route path="/auth"          element={<PublicRoute><AuthScreen /></PublicRoute>} />
+        <Route path="/"              element={<RootRoute session={session} profile={profile}><LandingScreen /></RootRoute>} />
+        <Route path="/auth"          element={<PublicRoute session={session} profile={profile}><AuthScreen /></PublicRoute>} />
         <Route path="/auth/callback" element={<AuthCallbackRoute />} />
-        <Route path="/onboarding"    element={<OnboardingRoute />} />
+        <Route path="/onboarding"    element={<OnboardingRoute session={session} profile={profile} setProfile={setProfile} />} />
 
-        <Route path="/dashboard"  element={<Shell><HomeScreen      profile={realProfile} /></Shell>} />
-        <Route path="/chat"       element={<Shell><ChatScreen      profile={realProfile} /></Shell>} />
-        <Route path="/library"    element={<Shell><LibraryScreen   profile={realProfile} /></Shell>} />
-        <Route path="/settings"   element={<Shell><SettingsScreen  profile={realProfile} /></Shell>} />
-        <Route path="/procedures" element={<Shell><ProceduresScreen profile={realProfile} /></Shell>} />
-        <Route path="/document"   element={<Shell><DocumentScreen  profile={realProfile} /></Shell>} />
-        <Route path="/community"  element={<Shell><CommunityScreen profile={realProfile} /></Shell>} />
+        <Route path="/chats"      element={<Shell session={session} profile={profile} realProfile={realProfile}><ChatsListScreen /></Shell>} />
+        <Route path="/chat"       element={<Shell session={session} profile={profile} realProfile={realProfile}><ChatScreen      profile={realProfile} /></Shell>} />
+        <Route path="/dashboard"  element={<Shell session={session} profile={profile} realProfile={realProfile}><HomeScreen      profile={realProfile} /></Shell>} />
+        <Route path="/cases"      element={<Shell session={session} profile={profile} realProfile={realProfile}><CasesListScreen profile={realProfile} /></Shell>} />
+        <Route path="/cases/:id"  element={<Shell session={session} profile={profile} realProfile={realProfile} noPadding><CaseWorkspaceScreen profile={realProfile} /></Shell>} />
+        <Route path="/cases/:id/edit" element={<Shell session={session} profile={profile} realProfile={realProfile}><EditCaseScreen /></Shell>} />
+        <Route path="/cases/new"  element={<Shell session={session} profile={profile} realProfile={realProfile}><NewCaseScreen /></Shell>} />
+        <Route path="/library"    element={<Shell session={session} profile={profile} realProfile={realProfile}><LibraryScreen   profile={realProfile} /></Shell>} />
+        <Route path="/settings"   element={<Shell session={session} profile={profile} realProfile={realProfile}><SettingsScreen  profile={realProfile} /></Shell>} />
+        <Route path="/procedures" element={<Shell session={session} profile={profile} realProfile={realProfile}><ProceduresScreen profile={realProfile} /></Shell>} />
+        <Route path="/document"   element={<Shell session={session} profile={profile} realProfile={realProfile}><DocumentScreen  profile={realProfile} /></Shell>} />
+        <Route path="/community"  element={<Shell session={session} profile={profile} realProfile={realProfile}><CommunityScreen profile={realProfile} /></Shell>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

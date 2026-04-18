@@ -6,9 +6,10 @@ import { Profile } from '../types';
 interface AppShellProps {
   children: ReactNode;
   profile: Profile | null;
+  noPadding?: boolean;
 }
 
-export default function AppShell({ children, profile }: AppShellProps) {
+export default function AppShell({ children, profile, noPadding = false }: AppShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   return (
@@ -26,7 +27,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
           profile={profile}
         />
 
-        <main className="flex-grow overflow-y-auto p-6">
+        <main className={`flex-grow h-0 ${noPadding ? 'overflow-hidden' : 'overflow-y-auto p-6'}`}>
           {children}
         </main>
       </div>
