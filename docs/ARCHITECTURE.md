@@ -114,22 +114,25 @@ frontend/
 ```
 ### Auth Flow
 
+
+```
 User opens app
-│
-▼
-Has session? ──No──► Landing Page ──► Auth Screen ──► Google OAuth
-│ │
-Yes ▼
-│ Supabase callback
-▼ │
-Profile exists? Trigger creates profile
-│ │
-Yes ──► onboarding_completed? ▼
-│ Onboarding Screen
-Yes (name + level)
-│ │
-▼ ▼
-Dashboard ◄────────────────────────── Save to Supabase
+      │
+      ▼
+ Has session? ──No──► Landing Page ──► Auth Screen ──► Google OAuth
+      │                                                      │
+     Yes                                                     ▼
+      │                                              Supabase callback
+      ▼                                                      │
+ Profile exists?                                    Trigger creates profile
+      │                                                      │
+     Yes ──► onboarding_completed?                           ▼
+                    │                               Onboarding Screen
+                   Yes                               (name + level)
+                    │                                      │
+                    ▼                                      ▼
+              Dashboard ◄────────────────────────── Save to Supabase
+```
 
 ### 3-Level Dashboard System
 
@@ -140,72 +143,81 @@ Dashboard ◄──────────────────────�
 | L3    | محامي / خبير (Expert) | ExpertDashboard  | Case management, AI tools, document drafting       |
 
 ### Design System
-
+```
 Colors:
-Primary (Navy): #1B3A6B
-Accent (Gold): #C9A84C
-Background: #F7F8FA
-Surface: #FFFFFF
-Text Primary: #1F2937
-Text Muted: #6B7280
-Border: #E5E7EB
+  Primary (Navy):   #1B3A6B
+  Accent (Gold):    #C9A84C
+  Background:       #F7F8FA
+  Surface:          #FFFFFF
+  Text Primary:     #1F2937
+  Text Muted:       #6B7280
+  Border:           #E5E7EB
+
 Typography:
-Font: IBM Plex Sans Arabic / Cairo
-Direction: RTL (dir="rtl") everywhere
+  Font: IBM Plex Sans Arabic / Cairo
+  Direction: RTL (dir="rtl") everywhere
+
 Icons:
-Library: Lucide React
-Style: stroke only, strokeWidth=1.5
-Rule: NO colorful icons
+  Library: Lucide React
+  Style: stroke only, strokeWidth=1.5
+  Rule: NO colorful icons
+```
 
 ---
 
 ## 4. Database Schema ✅
 
-All tables live in Supabase (PostgreSQL). All use Row Level Security (RLS).
+```sql
 profiles
-id uuid PK → auth.users
-full_name text
-legal_level text ('citizen' | 'student' | 'expert')
-onboarding_completed boolean DEFAULT false
-avatar_url text
-created_at timestamptz
-conversations 🔲 planned
-id uuid PK
-user_id uuid → profiles.id
-title text
-topic text
-is_archived boolean
-created_at timestamptz
-messages 🔲 planned
-id uuid PK
-conversation_id uuid → conversations.id
-role text ('user' | 'assistant')
-content text
-sources jsonb ← legal article citations
-created_at timestamptz
-documents 🔲 planned
-id uuid PK
-user_id uuid → profiles.id
-title text
-type text ('contract' | 'memo' | 'complaint' | 'template')
-content text
-file_path text
-created_at timestamptz
-cases 🔲 planned (L3 only)
-id uuid PK
-lawyer_id uuid → profiles.id
-title text
-client_name text
-status text ('new' | 'active' | 'completed' | 'archived')
-category text
-next_hearing date
-reference_number text
-notes text
-created_at timestamptz
-case_documents 🔲 planned (L3 only)
-case_id uuid → cases.id
-document_id uuid → documents.id
-added_at timestamptz
+  id                    uuid PK → auth.users
+  full_name             text
+  legal_level           text ('citizen' | 'student' | 'expert')
+  onboarding_completed  boolean DEFAULT false
+  avatar_url            text
+  created_at            timestamptz
+
+conversations         -- 🔲 planned
+  id                    uuid PK
+  user_id               uuid → profiles.id
+  title                 text
+  topic                 text
+  is_archived           boolean
+  created_at            timestamptz
+
+messages              -- 🔲 planned
+  id                    uuid PK
+  conversation_id       uuid → conversations.id
+  role                  text ('user' | 'assistant')
+  content               text
+  sources               jsonb
+  created_at            timestamptz
+
+documents             -- 🔲 planned
+  id                    uuid PK
+  user_id               uuid → profiles.id
+  title                 text
+  type                  text ('contract' | 'memo' | 'complaint' | 'template')
+  content               text
+  file_path             text
+  created_at            timestamptz
+
+cases                 -- 🔲 planned (L3 only)
+  id                    uuid PK
+  lawyer_id             uuid → profiles.id
+  title                 text
+  client_name           text
+  status                text ('new' | 'active' | 'completed' | 'archived')
+  category              text
+  next_hearing          date
+  reference_number      text
+  notes                 text
+  created_at            timestamptz
+
+case_documents        -- 🔲 planned (L3 only)
+  case_id               uuid → cases.id
+  document_id           uuid → documents.id
+  added_at              timestamptz
+```
 
 ---
 
