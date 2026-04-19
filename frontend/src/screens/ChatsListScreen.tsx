@@ -4,7 +4,8 @@ import {
   MessageSquare, 
   Search, 
   Plus, 
-  ChevronLeft 
+  ChevronLeft,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../utils/supabase/client';
 import { Conversation } from '../types';
@@ -48,6 +49,25 @@ export default function ChatsListScreen() {
     (c.title || 'محادثة بدون عنوان').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    
+    const confirmed = window.confirm('هل أنت متأكد من حذف هذه المحادثة؟');
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from('conversations')
+      .update({ is_archived: true })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting conversation:', error);
+      alert('حدث خطأ أثناء الحذف. حاول مرة أخرى.');
+      return;
+    }
+
+    setConversations(prev => prev.filter(c => c.id !== id));
+  };
   return (
     <div className="h-screen flex flex-col bg-[#F7F8FA] overflow-hidden" dir="rtl">
       
@@ -107,9 +127,19 @@ export default function ChatsListScreen() {
                   </span>
                   <span className="text-[10px] text-[#9CA3AF] mt-0.5">{c.topic || 'عام'}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-[#6B7280]">{timeAgo(c.created_at)}</span>
-                  <ChevronLeft size={16} className="text-[#E5E7EB] group-hover:text-[#1B3A6B] transition-all transform group-hover:-translate-x-1" />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[#6B7280]">{timeAgo(c.created_at)}</span>
+                    <ChevronLeft size={16} className="text-[#E5E7EB] group-hover:text-[#1B3A6B] transition-all transform group-hover:-translate-x-1" />
+                  </div>
+                  <button
+                    onClick={(e) => handleDeleteConversation(e, c.id)}
+                    className="p-2 text-[#E5E7EB] hover:text-red-500 transition-colors"
+                    title="حذف"
+                  >
+                    <Trash2 size={16} strokeWidth={1.5} />
+                  </button>
+                </div>
                 </div>
               </div>
             ))

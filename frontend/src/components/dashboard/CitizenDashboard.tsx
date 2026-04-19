@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Scale,
   Briefcase,
@@ -14,7 +14,7 @@ import {
 import { Profile, Conversation } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabase/client';
-import { useState, useEffect } from 'react';
+import { SUGGESTED_QUESTIONS } from '../../utils/constants';
 
 interface CitizenDashboardProps {
   greeting: string;
@@ -35,6 +35,34 @@ export default function CitizenDashboard({ greeting, profile }: CitizenDashboard
   const navigate = useNavigate();
   const [recentChats, setRecentChats] = useState<Conversation[]>([]);
   const [chatsLoading, setChatsLoading] = useState(true);
+
+  const startConversationWithQuestion = async (questionText: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Create conversation
+    const { data: conv, error } = await supabase
+      .from('conversations')
+      .insert({
+        user_id: user.id,
+        title: questionText.slice(0, 60),
+        topic: null,
+      })
+      .select()
+      .single();
+
+    if (error) return;
+
+    // Save user message
+    await supabase.from('messages').insert({
+      conversation_id: conv.id,
+      role: 'user',
+      content: questionText,
+    });
+
+    // Navigate to chat with this conversation loaded
+    navigate('/chat', { state: { conversationId: conv.id, initialMessage: questionText } });
+  };
 
   useEffect(() => {
     async function loadRecentChats() {
@@ -79,22 +107,19 @@ export default function CitizenDashboard({ greeting, profile }: CitizenDashboard
       <div>
         <p className="text-xs font-bold text-[#6B7280] text-right mb-3 uppercase tracking-wider">أسئلة شائعة — اضغط مباشرة</p>
         <div className="space-y-2">
-          {[
-            { icon: Briefcase, text: 'تصرفوا قيا بلا ما يعطوني حقوقي' },
-            { icon: Home,      text: 'مشكلة مع صاحب الدار' },
-            { icon: Users,     text: 'سؤال على الطلاق أو النفقة' },
-            { icon: Car,       text: 'مخالفة دير عليا الشرطة' },
-          ].map(({ icon: Icon, text }) => (
+          {SUGGESTED_QUESTIONS.map((q) => (
             <button 
-              key={text} 
-              onClick={() => navigate('/chat')}
-              className="w-full flex items-center justify-between px-4 py-3.5 bg-white border border-[#E5E7EB] rounded-xl hover:border-[#1B3A6B]/30 text-right group transition-all"
+              key={q.id}
+              onClick={() => startConversationWithQuestion(q.question)}
+              className="w-full flex items-center justify-between px-4 py-3.5 bg-white border border-[#E5E7EB] rounded-2xl hover:border-[#1B3A6B] hover:shadow-lg hover:shadow-[#1B3A6B]/5 text-right group transition-all"
             >
               <div className="flex items-center gap-3">
-                <Icon size={16} className="text-[#6B7280]" strokeWidth={1.5} />
-                <span className="text-sm font-medium text-[#1F2937]">{text}</span>
+                <q.icon size={16} className="text-[#6B7280] group-hover:text-[#1B3A6B]" strokeWidth={1.5} />
+                <span className="text-sm font-bold text-[#1F2937] group-hover:text-[#1B3A6B] transition-colors">{q.question}</span>
               </div>
-              <ChevronLeft size={16} className="text-[#6B7280] group-hover:text-[#1B3A6B] transition-transform group-hover:-translate-x-1" />
+              <div className="w-8 h-8 rounded-full bg-[#F7F8FA] group-hover:bg-[#E8EEF7] flex items-center justify-center transition-colors">
+                <ChevronLeft size={16} className="text-[#6B7280] group-hover:text-[#1B3A6B] group-hover:-translate-x-1 transition-all" />
+              </div>
             </button>
           ))}
         </div>
