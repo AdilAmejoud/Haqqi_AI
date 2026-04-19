@@ -19,11 +19,14 @@ import {
   MessageSquareText,
   Plus,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 import { Profile, Conversation, Message as DBMessage } from '../types';
 import { supabase } from '../utils/supabase/client';
 import { getSystemPrompt } from '../utils/supabase/getSystemPrompt';
+import { CATEGORY_CARDS, SUGGESTED_QUESTIONS } from '../utils/constants';
+import { suggestedQuestions as DATA_QUESTIONS } from '../data/suggestedQuestions';
 
 interface Message {
   id: string;
@@ -36,13 +39,6 @@ interface Message {
 interface ChatScreenProps {
   profile: Profile | null;
 }
-
-const QUICK_CHIPS = [
-  { text: 'حقوق الشغل', icon: Briefcase, color: '#1B3A6B', prompt: 'شرح ليا حقوقي في الشغل' },
-  { text: 'مسطرة إدارية', icon: ScrollText, color: '#C9A84C', prompt: 'كيفاش نجدد البطاقة الوطنية؟' },
-  { text: 'قانون الكراء', icon: KeyRound, color: '#1B3A6B', prompt: 'ما هي حقوقي كمكتري؟' },
-  { text: 'قانون الأسرة', icon: UsersRound, color: '#C9A84C', prompt: 'شرح ليا مسطرة الطلاق' },
-];
 
 const REASONING_STEPS = [
   'جارٍ البحث في المصادر القانونية',
@@ -68,10 +64,35 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const hasTriggeredInitial = useRef(false);
 
   useEffect(() => {
-    if (location.state?.conversationId) {
-      setSelectedConvId(location.state.conversationId);
+    const { conversationId, initialMessage } = location.state || {};
+    
+    // Prioritize conversationId from location state
+    if (conversationId && conversationId !== selectedConvId) {
+      setSelectedConvId(conversationId);
+      // loadMessages is handled by the useEffect(selectedConvId)
+    }
+
+    if (initialMessage && conversationId && !hasTriggeredInitial.current) {
+      hasTriggeredInitial.current = true;
+      
+      // Safety: Check if this conversation already has an AI response before triggering simulation on mount
+      (async () => {
+        const { data } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('role', 'assistant')
+          .limit(1);
+        
+        if (!data || data.length === 0) {
+          setTimeout(() => {
+            triggerAIResponse(conversationId, initialMessage);
+          }, 1000);
+        }
+      })();
     }
   }, [location.state]);
 
@@ -123,7 +144,98 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  const triggerAIResponse = async (convId: string, userText: string) => {
+    if (isTyping) return;
+
+    setIsTyping(true);
+    setReasoningStep(0);
+
+    // Check if this is one of our suggested questions with a mock answer
+    let aiResponseText = 'أهلاً بك. أنا مساعدك القانوني الذكي. كيف يمكنني مساعدتك في استشارتك اليوم؟';
+    
+    // Check main questions first
+    const mainMatch = DATA_QUESTIONS.find(q => q.question === userText);
+    if (mainMatch) {
+      aiResponseText = mainMatch.answer;
+    } else {
+      // Check follow-ups
+      for (const q of DATA_QUESTIONS) {
+        const followUp = q.followUps?.find(f => f.question === userText);
+        if (followUp) {
+          aiResponseText = followUp.answer;
+          break;
+        }
+      }
+    }
+
+    // Simulate AI response logic with chainable timeouts
+    let currentStep = 0;
+    const interval = setInterval(() => {
+      currentStep++;
+      if (currentStep < REASONING_STEPS.length) {
+        setReasoningStep(currentStep);
+      } else {
+        clearInterval(interval);
+        // Final insertion
+        (async () => {
+          const aiMsg = {
+            conversation_id: convId,
+            role: 'assistant' as const,
+            content: aiResponseText,
+          };
+
+          const { data: savedAiMsg } = await supabase
+            .from('messages')
+            .insert(aiMsg)
+            .select()
+            .single();
+
+          if (savedAiMsg) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === savedAiMsg.id)) return prev;
+              return [...prev, savedAiMsg];
+            });
+          }
+          setIsTyping(false);
+        })();
+      }
+    }, 1500);
+  };
+
+  const startConversationWithQuestion = async (questionText: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Create conversation
+    const { data: conv, error } = await supabase
+      .from('conversations')
+      .insert({
+        user_id: user.id,
+        title: questionText.slice(0, 60),
+        topic: null,
+      })
+      .select()
+      .single();
+
+    if (error) return;
+
+    // Save user message
+    const { data: savedMsg } = await supabase.from('messages').insert({
+      conversation_id: conv.id,
+      role: 'user',
+      content: questionText,
+    }).select().single();
+
+    if (savedMsg) {
+      setMessages([savedMsg]);
+    }
+    
+    setSelectedConvId(conv.id);
+    triggerAIResponse(conv.id, questionText);
+  };
+
   const handleSend = async (text: string = inputText) => {
+
     if (!text.trim()) return;
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -170,38 +282,55 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
     }
 
     setInputText('');
-    setIsTyping(true);
-    setReasoningStep(0);
+    if (convId) {
+      triggerAIResponse(convId, text);
+    }
+  };
 
-    // Simulate AI response
-    setTimeout(() => {
-      setReasoningStep(1);
-      setTimeout(() => {
-        setReasoningStep(2);
-        setTimeout(async () => {
-          const aiResponseText = 'أهلاً بك. أنا مساعدك القانوني الذكي. كيف يمكنني مساعدتك في استشارتك اليوم؟';
-          const aiMsg = {
-            conversation_id: convId as string,
-            role: 'assistant' as const,
-            content: aiResponseText,
-          };
+  const handleDeleteConversation = async () => {
+    if (!selectedConvId) return;
+    
+    const confirmed = window.confirm('هل أنت متأكد من حذف هذه المحادثة؟');
+    if (!confirmed) return;
 
-          const { data: savedAiMsg } = await supabase
-            .from('messages')
-            .insert(aiMsg)
-            .select()
-            .single();
+    const { error } = await supabase
+      .from('conversations')
+      .update({ is_archived: true })
+      .eq('id', selectedConvId);
 
-          if (savedAiMsg) {
-            setMessages(prev => [...prev, savedAiMsg]);
-          }
-          setIsTyping(false);
-        }, 1000);
-      }, 1000);
-    }, 1000);
+    if (error) {
+      console.error('Error deleting conversation:', error);
+      alert('حدث خطأ أثناء الحذف. حاول مرة أخرى.');
+      return;
+    }
+
+    navigate('/chats');
   };
 
   const isEmpty = messages.length === 0;
+
+  const renderMessageContent = (content: string, isAi: boolean) => {
+    return content.split('\n').map((line, i) => {
+      // Very basic bold logic for Darija/Arabic content
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      const formattedLine = parts.map((part, j) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return (
+            <strong key={j} className={`font-black ${isAi ? 'text-[#1B3A6B]' : 'text-white'}`}>
+              {part.slice(2, -2)}
+            </strong>
+          );
+        }
+        return part;
+      });
+
+      return (
+        <div key={i} className={line.trim() === '' ? 'h-2' : 'mb-0.5'}>
+          {formattedLine}
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-160px)] max-w-4xl mx-auto bg-white rounded-3xl border border-[#E5E7EB] shadow-sm overflow-hidden" dir="rtl">
@@ -215,13 +344,24 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
           <span className="text-sm font-black text-[#1F2937]">دردشة حقي AI</span>
         </div>
         
-        <button
-          onClick={() => navigate('/chats')}
-          className="flex items-center gap-1.5 text-xs font-bold text-[#6B7280] hover:text-[#1B3A6B] transition-colors"
-        >
-          <span>كل المحادثات</span>
-          <ChevronRight size={16} strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-3">
+          {selectedConvId && (
+            <button
+              onClick={handleDeleteConversation}
+              className="p-2 text-[#6B7280] hover:text-red-500 transition-colors"
+              title="حذف المحادثة"
+            >
+              <Trash2 size={18} strokeWidth={1.5} />
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/chats')}
+            className="flex items-center gap-1.5 text-xs font-bold text-[#6B7280] hover:text-[#1B3A6B] transition-colors"
+          >
+            <span>كل المحادثات</span>
+            <ChevronRight size={16} strokeWidth={2} />
+          </button>
+        </div>
       </div>
 
       {/* Messages Area */}
@@ -259,16 +399,16 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
 
             <p className="text-[#6B7280] text-sm mb-10 max-w-xs mx-auto">أنا هنا لمساعدتك في أي تساؤل قانوني مغربي. كيف أبدأ معك اليوم؟</p>
             <div className="grid grid-cols-2 gap-3 w-full max-w-md">
-              {QUICK_CHIPS.map((chip, idx) => (
+              {CATEGORY_CARDS.map((card) => (
                 <button 
-                  key={idx} 
-                  onClick={() => handleSend(chip.prompt)}
+                  key={card.id} 
+                  onClick={() => startConversationWithQuestion(card.openingMessage)}
                   className="p-5 bg-white border border-[#E5E7EB] rounded-2xl hover:border-[#1B3A6B] hover:shadow-lg hover:shadow-[#1B3A6B]/5 transition-all text-center group flex flex-col items-center justify-center min-h-[110px]"
                 >
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-colors bg-[#F7F8FA] group-hover:bg-[#E8EEF7]`}>
-                    <chip.icon size={20} className="text-[#1B3A6B]" strokeWidth={1.5} />
+                    <card.icon size={20} className="text-[#1B3A6B]" strokeWidth={1.5} />
                   </div>
-                  <span className="text-sm font-bold text-[#1F2937] group-hover:text-[#1B3A6B] transition-colors">{chip.text}</span>
+                  <span className="text-sm font-bold text-[#1F2937] group-hover:text-[#1B3A6B] transition-colors">{card.label}</span>
                 </button>
               ))}
             </div>
@@ -283,7 +423,7 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
                       ? 'bg-[#1B3A6B] text-white rounded-tr-none' 
                       : 'bg-[#F7F8FA] text-[#1F2937] border border-[#E5E7EB] rounded-tl-none'
                   }`}>
-                    {msg.content}
+                    {renderMessageContent(msg.content, msg.role === 'assistant')}
                   </div>
                   <span className="text-[10px] text-[#9CA3AF] mt-1 px-1">{new Date(msg.created_at).toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
