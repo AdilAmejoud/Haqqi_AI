@@ -140,7 +140,6 @@ export default function ChatsListScreen() {
                     <Trash2 size={16} strokeWidth={1.5} />
                   </button>
                 </div>
-                </div>
               </div>
             ))
           )}
