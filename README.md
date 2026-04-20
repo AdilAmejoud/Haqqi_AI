@@ -1,9 +1,20 @@
+<div align="center">
+
 # حقي AI — Haqqi AI
 
-> مساعدك القانوني الذكي بالدارجة المغربية  
-> Your AI-powered Moroccan legal assistant in Darija
+> **مساعدك القانوني الذكي بالدارجة المغربية**  
+> **Your AI-powered Moroccan legal assistant in Darija**
 
 ![HaqqiAI Banner](docs/banner.png)
+
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.io/)
+[![Gemini](https://img.shields.io/badge/Gemini-8E75C2?style=for-the-badge&logo=google-gemini&logoColor=white)](https://deepmind.google/technologies/gemini/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+</div>
 
 ---
 
