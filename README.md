@@ -5,7 +5,7 @@
 > **مساعدك القانوني الذكي بالدارجة المغربية**  
 > **Your AI-powered Moroccan legal assistant in Darija**
 
-![HaqqiAI Banner](docs/banner.png)
+<img src="docs/banner.png" alt="HaqqiAI Banner" width="100%">
 
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
