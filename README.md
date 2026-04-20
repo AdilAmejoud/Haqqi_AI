@@ -1,10 +1,5 @@
 <div align="center">
 
-# حقي AI — Haqqi AI
-
-> **مساعدك القانوني الذكي بالدارجة المغربية**  
-> **Your AI-powered Moroccan legal assistant in Darija**
-
 <img src="docs/banner.png" alt="HaqqiAI Banner" width="100%">
 
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
