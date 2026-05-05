@@ -69,7 +69,7 @@ export default function ChatsListScreen() {
     setConversations(prev => prev.filter(c => c.id !== id));
   };
   return (
-    <div className="h-screen flex flex-col bg-[#F7F8FA] overflow-hidden" dir="rtl">
+    <div className="h-full flex flex-col bg-[#F7F8FA] overflow-hidden" dir="rtl">
       
       {/* Header */}
       <div className="mx-8 mt-6 bg-white border border-[#E5E7EB] rounded-2xl px-8 py-6 flex items-center justify-between flex-shrink-0 shadow-sm">

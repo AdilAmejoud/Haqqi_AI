@@ -6,7 +6,6 @@ import {
   Circle, Archive, MoreHorizontal, Star,
   Pencil, Trash2
 } from 'lucide-react';
-import AppShell from '../components/AppShell';
 import { Profile, Case } from '../types';
 import { supabase } from '../utils/supabase/client';
 
@@ -62,7 +61,7 @@ export default function CasesListScreen({ profile }: CasesListScreenProps) {
   });
 
   return (
-    <div className="h-screen flex flex-col bg-[#F7F8FA] overflow-hidden" dir="rtl">
+    <div className="h-full flex flex-col bg-[#F7F8FA] overflow-hidden" dir="rtl">
 
       {/* Page Header — Rounded Card Card Style */}
       <div className="px-8 pt-6 pb-2 flex-shrink-0">
