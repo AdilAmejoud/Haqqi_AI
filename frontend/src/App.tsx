@@ -1,6 +1,8 @@
 import React, { useState, useEffect, ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './utils/supabase/client';
+// Supabase types available via vite-env.d.ts
+import type { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { fetchUserProfile } from './utils/supabase/profile';
 import { Profile } from './types';
 
@@ -40,7 +42,7 @@ function AuthCallbackRoute() {
   return <Spinner />;
 }
 
-function Shell({ children, noPadding, session, profile, realProfile }: { children: ReactNode, noPadding?: boolean, session: any, profile: ProfileState, realProfile: Profile | null }) {
+function Shell({ children, noPadding, session, profile, realProfile }: { children: ReactNode, noPadding?: boolean, session: Session | null, profile: ProfileState, realProfile: Profile | null }) {
   return (
     <PrivateRoute session={session} profile={profile}>
       <AppShell profile={realProfile} noPadding={noPadding}>{children}</AppShell>
@@ -48,7 +50,7 @@ function Shell({ children, noPadding, session, profile, realProfile }: { childre
   );
 }
 
-function PrivateRoute({ children, session, profile }: { children: ReactNode, session: any, profile: ProfileState }) {
+function PrivateRoute({ children, session, profile }: { children: ReactNode, session: Session | null, profile: ProfileState }) {
   if (!session) return <Navigate to="/auth" replace />;
   if (profile === 'loading') return <Spinner />;
   if (!profile || !(profile as Profile).onboarding_completed) {
@@ -57,7 +59,7 @@ function PrivateRoute({ children, session, profile }: { children: ReactNode, ses
   return <>{children}</>;
 }
 
-function RootRoute({ children, session, profile }: { children: ReactNode, session: any, profile: ProfileState }) {
+function RootRoute({ children, session, profile }: { children: ReactNode, session: Session | null, profile: ProfileState }) {
   if (!session) return <>{children}</>;
   if (profile === 'loading') return <Spinner />;
   if (profile && (profile as Profile).onboarding_completed)
@@ -65,7 +67,7 @@ function RootRoute({ children, session, profile }: { children: ReactNode, sessio
   return <Navigate to="/onboarding" replace />;
 }
 
-function PublicRoute({ children, session, profile }: { children: ReactNode, session: any, profile: ProfileState }) {
+function PublicRoute({ children, session, profile }: { children: ReactNode, session: Session | null, profile: ProfileState }) {
   if (!session) return <>{children}</>;
   if (profile === 'loading') return <Spinner />;
   if (profile && (profile as Profile).onboarding_completed)
@@ -73,7 +75,7 @@ function PublicRoute({ children, session, profile }: { children: ReactNode, sess
   return <Navigate to="/onboarding" replace />;
 }
 
-function OnboardingRoute({ session, profile, setProfile }: { session: any, profile: ProfileState, setProfile: (p: ProfileState) => void }) {
+function OnboardingRoute({ session, profile, setProfile }: { session: Session | null, profile: ProfileState, setProfile: (p: ProfileState) => void }) {
   if (!session) return <Navigate to="/auth" replace />;
   if (profile === 'loading') return <Spinner />;
   if (profile && (profile as Profile).onboarding_completed)
@@ -85,7 +87,7 @@ function OnboardingRoute({ session, profile, setProfile }: { session: any, profi
 }
 
 export default function App() {
-  const [session, setSession] = useState<any>(undefined);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<ProfileState>('loading');
 
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function App() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      (event: AuthChangeEvent, newSession: Session | null) => {
         if (!mounted) return;
         if (event === 'INITIAL_SESSION') return;
 
@@ -144,10 +146,10 @@ export default function App() {
         <Route path="/auth/callback" element={<AuthCallbackRoute />} />
         <Route path="/onboarding"    element={<OnboardingRoute session={session} profile={profile} setProfile={setProfile} />} />
 
-        <Route path="/chats"      element={<Shell session={session} profile={profile} realProfile={realProfile}><ChatsListScreen /></Shell>} />
+        <Route path="/chats"      element={<Shell session={session} profile={profile} realProfile={realProfile} noPadding><ChatsListScreen /></Shell>} />
         <Route path="/chat"       element={<Shell session={session} profile={profile} realProfile={realProfile}><ChatScreen      profile={realProfile} /></Shell>} />
         <Route path="/dashboard"  element={<Shell session={session} profile={profile} realProfile={realProfile}><HomeScreen      profile={realProfile} /></Shell>} />
-        <Route path="/cases"      element={<Shell session={session} profile={profile} realProfile={realProfile}><CasesListScreen profile={realProfile} /></Shell>} />
+        <Route path="/cases"      element={<Shell session={session} profile={profile} realProfile={realProfile} noPadding><CasesListScreen profile={realProfile} /></Shell>} />
         <Route path="/cases/:id"  element={<Shell session={session} profile={profile} realProfile={realProfile} noPadding><CaseWorkspaceScreen profile={realProfile} /></Shell>} />
         <Route path="/cases/:id/edit" element={<Shell session={session} profile={profile} realProfile={realProfile}><EditCaseScreen /></Shell>} />
         <Route path="/cases/new"  element={<Shell session={session} profile={profile} realProfile={realProfile}><NewCaseScreen /></Shell>} />
