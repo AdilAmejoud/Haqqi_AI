@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   BookOpen,
@@ -12,7 +12,6 @@ import {
 import { Profile, Conversation } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../utils/supabase/client';
-import { useState, useEffect } from 'react';
 
 interface StudentDashboardProps {
   greeting: string;

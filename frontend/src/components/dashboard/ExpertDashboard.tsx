@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   AlertCircle,
@@ -18,7 +18,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Profile, Case, Conversation } from '../../types';
 import { supabase } from '../../utils/supabase/client';
-import { useState, useEffect } from 'react';
 
 interface ExpertDashboardProps {
   greeting: string;
@@ -52,9 +51,12 @@ export default function ExpertDashboard({ greeting, profile }: ExpertDashboardPr
   useEffect(() => {
     async function loadDashboardData() {
       setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
       const { data, error } = await supabase
         .from('cases')
         .select('*')
+        .eq('lawyer_id', user.id)
         .order('created_at', { ascending: false });
       
       if (!error && data) {
