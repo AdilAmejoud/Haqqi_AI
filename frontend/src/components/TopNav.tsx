@@ -16,8 +16,10 @@ export default function TopNav({ isSidebarOpen, setIsSidebarOpen, profile }: Top
           <button
             onClick={() => setIsSidebarOpen(true)}
             className="p-2 hover:bg-[#F7F8FA] rounded-lg text-[#6B7280] lg:hidden"
+            aria-label="فتح القائمة"
+            title="فتح القائمة"
           >
-            <Menu size={22} />
+            <Menu size={22} aria-hidden="true" />
           </button>
         )}
 
@@ -41,14 +43,14 @@ export default function TopNav({ isSidebarOpen, setIsSidebarOpen, profile }: Top
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        <button className="p-2 text-[#6B7280] hover:bg-[#F7F8FA] rounded-lg relative">
+        <button className="p-2 text-[#6B7280] hover:bg-[#F7F8FA] rounded-lg relative" aria-label="الإشعارات" title="الإشعارات">
           <Bell size={20} strokeWidth={1.5} />
-          <span className="absolute top-2 left-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+          <span className="absolute top-2 left-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white" aria-hidden="true"></span>
         </button>
 
         <div className="h-8 w-px bg-[#E5E7EB] hidden sm:block"></div>
 
-        <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[#E8EEF7] text-[#1B3A6B] font-bold text-sm hover:shadow-md transition-all">
+        <button className="flex items-center justify-center w-10 h-10 rounded-full bg-[#E8EEF7] text-[#1B3A6B] font-bold text-sm hover:shadow-md transition-all" aria-label="الحساب" title="الحساب">
           {profile?.full_name?.charAt(0) || 'U'}
         </button>
       </div>
