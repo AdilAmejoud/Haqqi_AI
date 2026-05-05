@@ -36,11 +36,7 @@ export default function AuthScreen() {
       {/* Decorative Left/Top Section (Premium Moroccan Feel) */}
       <div className="lg:w-1/2 bg-[#1B3A6B] relative flex flex-col items-center justify-center p-12 text-center overflow-hidden">
         {/* Subtle Geometric Overlay */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{ 
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l15 30H15L30 0zM0 30l30 15V15L0 30zm60 0L30 15v30l30-15zM30 60l-15-30h30L30 60z' fill='%23C9A84C' fill-rule='evenodd'/%3E%3C/svg%3E")`,
-            backgroundSize: '80px 80px'
-          }}
+        <div className="absolute inset-0 opacity-10 pointer-events-none geometric-bg" 
         />
         
         <div className="relative z-10 flex flex-col items-center max-w-sm">
