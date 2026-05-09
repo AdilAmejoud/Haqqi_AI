@@ -19,6 +19,8 @@ import DocumentsHubScreen from './screens/DocumentsHubScreen';
 import SavedDocumentsScreen from './screens/SavedDocumentsScreen';
 import TemplatesScreen from './screens/TemplatesScreen';
 import CommunityScreen from './screens/CommunityScreen';
+import CommunityPostScreen from './screens/CommunityPostScreen';
+import LawyersDirectoryScreen from './screens/LawyersDirectoryScreen';
 import NewCaseScreen from './screens/NewCaseScreen';
 import EditCaseScreen from './screens/EditCaseScreen';
 import CasesListScreen from './screens/CasesListScreen';
@@ -203,6 +205,8 @@ export default function App() {
         <Route path="/documents/templates" element={<Shell session={session} profile={profile} realProfile={realProfile}><TemplatesScreen profile={realProfile} /></Shell>} />
         <Route path="/document" element={<Navigate to="/documents" replace />} />
         <Route path="/community"  element={<Shell session={session} profile={profile} realProfile={realProfile}><CommunityScreen profile={realProfile} /></Shell>} />
+        <Route path="/community/lawyers" element={<Shell session={session} profile={profile} realProfile={realProfile}><LawyersDirectoryScreen profile={realProfile} /></Shell>} />
+        <Route path="/community/:id" element={<Shell session={session} profile={profile} realProfile={realProfile}><CommunityPostScreen profile={realProfile} /></Shell>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

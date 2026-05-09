@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, 
@@ -11,7 +11,9 @@ import {
   LogOut,
   Download,
   RefreshCw,
-  Scale
+  Scale,
+  X,
+  Loader
 } from 'lucide-react';
 import { supabase } from '../utils/supabase/client';
 import { Profile } from '../types';
@@ -31,6 +33,18 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ profile }: SettingsScreenProps) {
   const navigate = useNavigate();
+  const [language, setLanguage] = useState('الدارجة المغربية');
+  const [saving, setSaving] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState(profile?.full_name || '');
+  const [editLevel, setEditLevel] = useState<Profile['legal_level']>(profile?.legal_level || 'citizen');
+
+  useEffect(() => {
+    if (profile) {
+      setEditName(profile.full_name || '');
+      setEditLevel(profile.legal_level || 'citizen');
+    }
+  }, [profile]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -62,7 +76,9 @@ export default function SettingsScreen({ profile }: SettingsScreenProps) {
             <p className="text-xs text-[#6B7280] mt-1 italic">عضو مجاني · منذ {new Date(profile?.created_at || '').toLocaleDateString('ar-MA', { month: 'long', year: 'numeric' })}</p>
           </div>
         </div>
-        <button className="text-xs font-bold border border-[#E5E7EB] px-4 py-2 rounded-xl text-[#1F2937] hover:bg-[#F7F8FA] hover:border-[#1B3A6B] transition-all">
+        <button 
+          onClick={() => setIsEditProfileOpen(true)}
+          className="text-xs font-bold border border-[#E5E7EB] px-4 py-2 rounded-xl text-[#1F2937] hover:bg-[#F7F8FA] hover:border-[#1B3A6B] transition-all">
           تعديل الملف الشخصي
         </button>
       </div>
@@ -88,7 +104,15 @@ export default function SettingsScreen({ profile }: SettingsScreenProps) {
       </SettingsSection>
 
       <SettingsSection title="المساعد الذكي" icon={Sparkles}>
-        <SelectSetting label="لغة الرد المفضلة" value="الدارجة" />
+        <SelectSetting
+          label="لغة الرد المفضلة"
+          value={language}
+          options={['الدارجة المغربية', 'العربية الفصحى', 'الفرنسية']}
+          onChange={(val) => {
+            setLanguage(val);
+            localStorage.setItem('haqqi_language', val);
+          }}
+        />
         <ToggleSetting label="حفظ السجل"      sub="تخزين المحادثات للرجوع إليها مستقبلاً"            defaultOn />
         <ToggleSetting label="اقتراحات ذكية"  sub="توصيات قانونية بناء على سياقك"           defaultOn />
       </SettingsSection>
@@ -109,7 +133,7 @@ export default function SettingsScreen({ profile }: SettingsScreenProps) {
       </SettingsSection>
 
       <SettingsSection title="حول التطبيق" icon={Info}>
-        <InfoSetting   label="إصدار التطبيق"       value="2.4.0 (Build 45)" />
+        <InfoSetting   label="إصدار التطبيق"       value="1.0.0 (Beta)" />
         <ActionSetting label="الشروط والأحكام" />
         <ActionSetting label="سياسة الخصوصية" />
         <ActionSetting label="التواصل بالدعم الفني" />
@@ -141,6 +165,82 @@ export default function SettingsScreen({ profile }: SettingsScreenProps) {
         </div>
         <p className="text-[10px] text-[#9CA3AF] font-medium">جميع الحقوق محفوظة © 2025 حقي AI — الدار البيضاء، المغرب</p>
       </div>
+
+      {/* Edit Profile Modal */}
+      {isEditProfileOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" 
+            onClick={() => !saving && setIsEditProfileOpen(false)} 
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div 
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={e => e.stopPropagation()}
+              dir="rtl"
+            >
+              <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+                <button 
+                  onClick={() => !saving && setIsEditProfileOpen(false)} 
+                  className="text-[#6B7280] hover:text-[#1F2937] transition-colors"
+                >
+                  <X size={20} strokeWidth={1.5} />
+                </button>
+                <h3 className="font-bold text-[#1F2937] text-lg">تعديل الملف الشخصي</h3>
+                <div className="w-5" />
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-[#1F2937] block mb-1.5">
+                    الاسم الكامل
+                  </label>
+                  <input
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    placeholder="أدخل اسمك الكامل"
+                    className="w-full px-4 py-3 bg-[#F7F8FA] border border-transparent focus:border-[#1B3A6B] focus:bg-white rounded-xl text-sm outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#1F2937] block mb-1.5">
+                    المستوى القانوني
+                  </label>
+                  <select
+                    value={editLevel || 'citizen'}
+                    onChange={e => setEditLevel(e.target.value as Profile['legal_level'])}
+                    className="w-full px-4 py-3 bg-[#F7F8FA] border border-transparent focus:border-[#1B3A6B] focus:bg-white rounded-xl text-sm outline-none transition-all"
+                  >
+                    <option value="citizen">مواطن</option>
+                    <option value="student">طالب حقوق</option>
+                    <option value="expert">خبير قانوني</option>
+                  </select>
+                </div>
+                
+                <button
+                  onClick={async () => {
+                    if (!editName.trim()) return;
+                    setSaving(true);
+                    await supabase.from('profiles')
+                      .update({ full_name: editName.trim(), legal_level: editLevel })
+                      .eq('id', profile?.id);
+                    window.location.reload();
+                  }}
+                  disabled={!editName.trim() || saving}
+                  className="w-full bg-[#1B3A6B] hover:bg-[#2D4E87] disabled:opacity-50 text-white font-bold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all mt-6"
+                >
+                  {saving ? (
+                    <><Loader size={16} className="animate-spin" strokeWidth={1.5} /> جاري الحفظ...</>
+                  ) : (
+                    'حفظ التعديلات'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

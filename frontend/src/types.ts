@@ -1,4 +1,3 @@
-export type Screen = 'landing' | 'onboarding' | 'auth' | 'home' | 'chat' | 'document' | 'report' | 'procedures' | 'social' | 'dashboard' | 'library' | 'settings';
 export type UserLevel = 'citizen' | 'student' | 'expert' | null;
 
 export interface Profile {
@@ -40,12 +39,78 @@ export interface Message {
   created_at: string;
 }
 
-export interface Document {
+export interface LawDocument {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  pdf_url: string;
+  law_number: string;
+  year: number;
+  tags: string[];
+}
+
+export interface SavedDocument {
   id: string;
   user_id: string;
   title: string;
-  type: 'contract' | 'memo' | 'complaint' | 'template' | null;
+  type: string | null;
+  category: string | null;
   content: string | null;
   file_path: string | null;
+  created_at: string;
+}
+
+export interface ForumPost {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  category: string | null;
+  tags: string[];
+  is_anonymous: boolean;
+  is_resolved: boolean;
+  views: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForumAnswer {
+  id: string;
+  post_id: string;
+  user_id: string | null;
+  content: string;
+  is_ai: boolean;
+  is_best_answer: boolean;
+  votes: number;
+  created_at: string;
+}
+
+export interface LawyerProfile {
+  id: string;
+  user_id: string;
+  full_name: string;
+  bio: string | null;
+  specialties: string[];
+  city: string | null;
+  phone: string | null;
+  email: string | null;
+  bar_number: string | null;
+  years_experience: number | null;
+  is_verified: boolean;
+  is_available: boolean;
+  rating: number;
+  response_count: number;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: 'new_answer' | 'vote' | 'best_answer' | 'general';
+  title: string;
+  body: string | null;
+  link: string | null;
+  is_read: boolean;
   created_at: string;
 }
