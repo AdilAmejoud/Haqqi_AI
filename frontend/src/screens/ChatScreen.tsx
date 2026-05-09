@@ -40,6 +40,8 @@ interface ChatScreenProps {
   profile: Profile | null;
 }
 
+const BRIDGE_URL = import.meta.env.VITE_BRIDGE_URL || 'http://localhost:8000';
+
 const REASONING_STEPS = [
   'جارٍ البحث في المصادر القانونية',
   'تحليل القانون المغربي المعمول به',
@@ -58,9 +60,16 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   const [showUploadMenu, setShowUploadMenu] = useState(false);
-  
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [attachedPdf, setAttachedPdf] = useState<File | null>(null);
+  const [pdfText, setPdfText] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -146,60 +155,87 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
 
   const triggerAIResponse = async (convId: string, userText: string) => {
     if (isTyping) return;
-
     setIsTyping(true);
     setReasoningStep(0);
 
-    // Check if this is one of our suggested questions with a mock answer
-    let aiResponseText = 'أهلاً بك. أنا مساعدك القانوني الذكي. كيف يمكنني مساعدتك في استشارتك اليوم؟';
-    
-    // Check main questions first
-    const mainMatch = DATA_QUESTIONS.find(q => q.question === userText);
-    if (mainMatch) {
-      aiResponseText = mainMatch.answer;
-    } else {
-      // Check follow-ups
-      for (const q of DATA_QUESTIONS) {
-        const followUp = q.followUps?.find(f => f.question === userText);
-        if (followUp) {
-          aiResponseText = followUp.answer;
-          break;
-        }
+    // Build history from current messages
+    const history = messages.map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+
+    // Advance reasoning steps visually
+    const stepInterval = setInterval(() => {
+      setReasoningStep(prev => {
+        if (prev < REASONING_STEPS.length - 1) return prev + 1;
+        clearInterval(stepInterval);
+        return prev;
+      });
+    }, 1200);
+
+    try {
+      const response = await fetch(`${BRIDGE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userText,
+          history,
+          legal_level: profile?.legal_level ?? 'citizen',
+          domain: null,
+          conversation_id: convId,
+          pdf_context: pdfText || null,
+          pdf_filename: attachedPdf?.name || null,
+        }),
+      });
+
+      clearInterval(stepInterval);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
+
+      const data = await response.json();
+      const aiResponseText = data.reply;
+
+      // Save AI message to Supabase
+      const aiMsg = {
+        conversation_id: convId,
+        role: 'assistant' as const,
+        content: aiResponseText,
+        sources: data.sources ?? null,
+      };
+
+      const { data: savedAiMsg } = await supabase
+        .from('messages')
+        .insert(aiMsg)
+        .select()
+        .single();
+
+      if (savedAiMsg) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === savedAiMsg.id)) return prev;
+          return [...prev, savedAiMsg];
+        });
+      }
+
+    } catch (error) {
+      clearInterval(stepInterval);
+      console.error('Bridge error:', error);
+
+      // Save error message so user sees feedback
+      const errorMsg = {
+        conversation_id: convId,
+        role: 'assistant' as const,
+        content: 'عفواً، حدث خطأ في الاتصال. تأكد أن الخادم شغال على المنفذ 8000.',
+        sources: null,
+      };
+      const { data: savedErr } = await supabase
+        .from('messages').insert(errorMsg).select().single();
+      if (savedErr) setMessages(prev => [...prev, savedErr]);
+
+    } finally {
+      setIsTyping(false);
     }
-
-    // Simulate AI response logic with chainable timeouts
-    let currentStep = 0;
-    const interval = setInterval(() => {
-      currentStep++;
-      if (currentStep < REASONING_STEPS.length) {
-        setReasoningStep(currentStep);
-      } else {
-        clearInterval(interval);
-        // Final insertion
-        (async () => {
-          const aiMsg = {
-            conversation_id: convId,
-            role: 'assistant' as const,
-            content: aiResponseText,
-          };
-
-          const { data: savedAiMsg } = await supabase
-            .from('messages')
-            .insert(aiMsg)
-            .select()
-            .single();
-
-          if (savedAiMsg) {
-            setMessages(prev => {
-              if (prev.some(m => m.id === savedAiMsg.id)) return prev;
-              return [...prev, savedAiMsg];
-            });
-          }
-          setIsTyping(false);
-        })();
-      }
-    }, 1500);
   };
 
   const startConversationWithQuestion = async (questionText: string) => {
@@ -307,29 +343,270 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
     navigate('/chats');
   };
 
+  const startVoice = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('المتصفح ديالك ما كيدعمش التعرف على الصوت. استخدم Chrome أو Edge.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.lang = 'ar-MA';        // Moroccan Arabic first
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInputText(prev => prev + transcript);
+      setIsListening(false);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech error:', event.error);
+      setIsListening(false);
+      if (event.error === 'not-allowed') {
+        alert('خاصك تسمح للمتصفح بالوصول للميكروفون');
+      }
+    };
+
+    recognition.onend = () => setIsListening(false);
+
+    recognition.start();
+  };
+
   const isEmpty = messages.length === 0;
 
   const renderMessageContent = (content: string, isAi: boolean) => {
-    return content.split('\n').map((line, i) => {
-      // Very basic bold logic for Darija/Arabic content
-      const parts = line.split(/(\*\*.*?\*\*)/g);
-      const formattedLine = parts.map((part, j) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return (
-            <strong key={j} className={`font-black ${isAi ? 'text-[#1B3A6B]' : 'text-white'}`}>
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        return part;
-      });
+    const lines = content.split('\n');
+    const elements: React.ReactNode[] = [];
+    let i = 0;
 
+    // Inline markdown: **bold** and *italic*
+    const renderInline = (text: string, key: string | number) => {
+      const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
       return (
-        <div key={i} className={line.trim() === '' ? 'h-2' : 'mb-0.5'}>
-          {formattedLine}
-        </div>
+        <span key={key}>
+          {parts.map((part, j) => {
+            if (part.startsWith('**') && part.endsWith('**'))
+              return <strong key={j} className={isAi ? 'font-bold text-[#1B3A6B]' : 'font-bold text-white'}>{part.slice(2, -2)}</strong>;
+            if (part.startsWith('*') && part.endsWith('*'))
+              return <em key={j} className="italic opacity-90">{part.slice(1, -1)}</em>;
+            return part;
+          })}
+        </span>
       );
+    };
+
+    // Check if a line is a table row
+    const isTableRow = (line: string) => line.trim().startsWith('|') && line.trim().endsWith('|');
+    const isSeparatorRow = (line: string) => /^\|[\s\-:|]+\|$/.test(line.trim().replace(/\|[\s\-:|]+/g, '|---'));
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Empty line → spacer
+      if (trimmed === '') {
+        elements.push(<div key={i} className="h-2" />);
+        i++;
+        continue;
+      }
+
+      // # H1 — largest heading
+      if (/^#\s/.test(trimmed)) {
+        const text = trimmed.replace(/^#\s*/, '');
+        elements.push(
+          <p key={i} className={`text-sm font-black mt-4 mb-1.5 pb-1 border-b ${isAi ? 'text-[#1B3A6B] border-[#E8EEF7]' : 'text-white border-white/30'}`}>
+            {renderInline(text, `h1-${i}`)}
+          </p>
+        );
+        i++; continue;
+      }
+
+      // ## H2 — section heading
+      if (/^##\s/.test(trimmed) && !trimmed.startsWith('###')) {
+        const text = trimmed.replace(/^##\s*/, '');
+        elements.push(
+          <div key={i} className={`flex items-center gap-1.5 mt-3 mb-1`}>
+            <div className={`w-0.5 h-4 rounded-full flex-shrink-0 ${isAi ? 'bg-[#1B3A6B]' : 'bg-white/60'}`} />
+            <p className={`text-sm font-extrabold ${isAi ? 'text-[#1B3A6B]' : 'text-white'}`}>
+              {renderInline(text, `h2-${i}`)}
+            </p>
+          </div>
+        );
+        i++; continue;
+      }
+
+      // ### H3 — subheading
+      if (trimmed.startsWith('###')) {
+        const text = trimmed.replace(/^###\s*/, '');
+        elements.push(
+          <div key={i} className={`flex items-center gap-1.5 mt-2.5 mb-0.5`}>
+            <div className={`h-3 w-px flex-shrink-0 ${isAi ? 'bg-[#1B3A6B]/50' : 'bg-white/50'}`} />
+            <span className={`text-sm font-bold ${isAi ? 'text-[#2D4E87]' : 'text-white/90'}`}>
+              {renderInline(text, `h3-${i}`)}
+            </span>
+          </div>
+        );
+        i++; continue;
+      }
+
+      // Markdown table block
+      if (isTableRow(trimmed)) {
+        const headerCells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+        const tableRows: string[][] = [];
+        i++;
+
+        // Skip separator row (--- | --- |)
+        if (i < lines.length && /^[\|\s\-:]+$/.test(lines[i])) i++;
+
+        // Collect data rows
+        while (i < lines.length && isTableRow(lines[i].trim())) {
+          tableRows.push(lines[i].trim().slice(1, -1).split('|').map(c => c.trim()));
+          i++;
+        }
+
+        elements.push(
+          <div key={`table-${i}`} className="my-3 overflow-x-auto rounded-xl border border-[#E5E7EB]">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className={`${isAi ? 'bg-[#1B3A6B]' : 'bg-white/20'}`}>
+                  {headerCells.map((cell, j) => (
+                    <th key={j} className="px-4 py-2.5 text-right font-bold text-white text-xs whitespace-nowrap">
+                      {renderInline(cell, `th-${j}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((row, ri) => (
+                  <tr key={ri} className={`border-t border-[#E5E7EB] ${ri % 2 === 0 ? 'bg-white' : 'bg-[#F7F8FA]'}`}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} className={`px-4 py-2.5 text-right leading-relaxed ${isAi ? 'text-[#374151]' : 'text-white/90'}`}>
+                        {renderInline(cell, `td-${ri}-${ci}`)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        continue;
+      }
+
+      // Bullet list block (lines starting with - or •)
+      if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
+        const items: string[] = [];
+        while (i < lines.length && (lines[i].trim().startsWith('- ') || lines[i].trim().startsWith('• '))) {
+          items.push(lines[i].trim().replace(/^[-•]\s*/, ''));
+          i++;
+        }
+        elements.push(
+          <ul key={`ul-${i}`} className="my-1.5 space-y-1 pr-1">
+            {items.map((item, j) => (
+              <li key={j} className="flex items-start gap-2 text-sm leading-relaxed">
+                <span className={`mt-2 w-1.5 h-1.5 rounded-full flex-shrink-0 ${isAi ? 'bg-[#1B3A6B]' : 'bg-white/70'}`} />
+                <span className={isAi ? 'text-[#374151]' : 'text-white/95'}>{renderInline(item, j)}</span>
+              </li>
+            ))}
+          </ul>
+        );
+        continue;
+      }
+
+      // Numbered list block
+      if (/^\d+\.\s/.test(trimmed)) {
+        const items: { num: number; text: string }[] = [];
+        while (i < lines.length && /^\d+\.\s/.test(lines[i].trim())) {
+          const match = lines[i].trim().match(/^(\d+)\.\s*(.*)/);
+          if (match) items.push({ num: parseInt(match[1]), text: match[2] });
+          i++;
+        }
+        elements.push(
+          <ol key={`ol-${i}`} className="my-1.5 space-y-1.5 pr-1">
+            {items.map((item, j) => (
+              <li key={j} className="flex items-start gap-2.5 text-sm leading-relaxed">
+                <span className={`mt-0.5 w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-black ${isAi ? 'bg-[#E8EEF7] text-[#1B3A6B]' : 'bg-white/20 text-white'}`}>
+                  {item.num}
+                </span>
+                <span className={isAi ? 'text-[#374151]' : 'text-white/95'}>{renderInline(item.text, j)}</span>
+              </li>
+            ))}
+          </ol>
+        );
+        continue;
+      }
+
+      // Regular paragraph
+      elements.push(
+        <p key={i} className={`text-sm leading-relaxed mb-0.5 ${isAi ? 'text-[#1F2937]' : 'text-white'}`}>
+          {renderInline(trimmed, i)}
+        </p>
+      );
+      i++;
+    }
+
+    return <div className="space-y-0.5">{elements}</div>;
+  };
+
+
+
+  const extractPdfText = async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const pdfjsLib = await import('pdfjs-dist');
+          // Use the exact version installed (5.7.284)
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.7.284/pdf.worker.min.mjs';
+          const typedArray = new Uint8Array(e.target?.result as ArrayBuffer);
+          const pdf = await pdfjsLib.getDocument(typedArray).promise;
+          let text = '';
+          for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map((it: any) => it.str).join(' ') + '\n';
+          }
+          resolve(text.slice(0, 12000));
+        } catch (err) {
+          console.error('Error extracting PDF text:', err);
+          resolve('');
+        }
+      };
+      reader.readAsArrayBuffer(file);
     });
+  };
+
+  const handlePdfAttach = async (file: File) => {
+    if (!file.type.includes('pdf')) {
+      alert('فقط ملفات PDF مدعومة');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('حجم الملف يتجاوز 10MB');
+      return;
+    }
+    setPdfLoading(true);
+    setAttachedPdf(file);
+    const text = await extractPdfText(file);
+    setPdfText(text);
+    setPdfLoading(false);
   };
 
   return (
@@ -425,6 +702,18 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
                   }`}>
                     {renderMessageContent(msg.content, msg.role === 'assistant')}
                   </div>
+                  {msg.role === 'assistant' && msg.sources && Array.isArray(msg.sources) && msg.sources.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1 justify-end">
+                      {msg.sources.slice(0, 3).map((s: any, i: number) => (
+                        <span
+                          key={i}
+                          className="text-[9px] bg-[#E8EEF7] text-[#1B3A6B] px-2 py-0.5 rounded-full font-medium"
+                        >
+                          {s.law?.slice(0, 30)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <span className="text-[10px] text-[#9CA3AF] mt-1 px-1">{new Date(msg.created_at).toLocaleTimeString('ar-MA', { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
@@ -453,13 +742,35 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
       <div className="p-6 border-t border-[#F3F4F6] bg-[#F7F8FA]/50">
         <div className="relative flex items-center gap-3">
           <div className="flex-1 relative">
+            {attachedPdf && (
+              <div className="absolute -top-14 right-0 left-0 flex items-center justify-between bg-[#E8EEF7] border border-[#1B3A6B]/20 rounded-xl py-2 px-3">
+                <button
+                  onClick={() => { setAttachedPdf(null); setPdfText(''); }}
+                  className="text-[#6B7280] hover:text-red-500 transition-colors"
+                >
+                  <X size={14} strokeWidth={1.5} />
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-[#1B3A6B] font-bold truncate max-w-[200px]">
+                    {attachedPdf.name}
+                  </span>
+                  <FileText size={13} className="text-[#1B3A6B]" strokeWidth={1.5} />
+                </div>
+              </div>
+            )}
+            {isListening && (
+              <div className="absolute -top-8 right-0 left-0 flex items-center justify-center gap-2 bg-red-50 border border-red-200 rounded-lg py-1 px-3">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                <span className="text-xs text-red-600 font-medium">جاري الاستماع... تكلم الآن</span>
+              </div>
+            )}
             <input 
               ref={inputRef}
               type="text" 
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="اكتب سؤالك بالدارجة..." 
+              placeholder={attachedPdf ? `اسأل عن "${attachedPdf.name}"...` : 'اكتب سؤالك بالدارجة...'} 
               className="w-full bg-white border border-[#E5E7EB] focus:border-[#1B3A6B] rounded-2xl py-4 pr-4 pl-14 text-sm transition-all outline-none shadow-sm"
               dir="rtl"
             />
@@ -473,8 +784,39 @@ export default function ChatScreen({ profile }: ChatScreenProps) {
                   <Plus size={20} strokeWidth={1.5} />
                 </button>
               )}
-              <button className="p-2 text-[#6B7280] hover:text-[#1B3A6B] transition-colors" title="تسجيل صوتي"><Mic size={20} strokeWidth={1.5} /></button>
-              <button className="p-2 text-[#6B7280] hover:text-[#1B3A6B] transition-colors" title="إرفاق ملف"><Paperclip size={20} strokeWidth={1.5} /></button>
+              <button
+                onClick={startVoice}
+                className={`p-2 transition-colors ${
+                  isListening
+                    ? 'text-red-500 animate-pulse'
+                    : 'text-[#6B7280] hover:text-[#1B3A6B]'
+                }`}
+                title={isListening ? 'جاري الاستماع...' : 'تحدث بالصوت'}
+              >
+                <Mic size={20} strokeWidth={1.5} />
+              </button>
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={e => e.target.files?.[0] && handlePdfAttach(e.target.files[0])}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`p-2 transition-colors ${
+                    attachedPdf
+                      ? 'text-[#1B3A6B]'
+                      : 'text-[#6B7280] hover:text-[#1B3A6B]'
+                  }`}
+                  title="إرفاق PDF"
+                >
+                  {pdfLoading
+                    ? <Loader size={20} strokeWidth={1.5} className="animate-spin" />
+                    : <Paperclip size={20} strokeWidth={1.5} />}
+                </button>
+              </>
             </div>
           </div>
           <button 

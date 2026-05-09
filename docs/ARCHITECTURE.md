@@ -72,6 +72,7 @@ Haqqi_AI/ ← GitHub repo root
 ## 3. Frontend Architecture ✅
 
 ### Folder Structure
+
 ```text
 frontend/
 ├── src/
@@ -112,8 +113,8 @@ frontend/
 ├── tsconfig.json
 └── .env.example
 ```
-### Auth Flow
 
+### Auth Flow
 
 ```
 User opens app
@@ -143,6 +144,7 @@ User opens app
 | L3    | محامي / خبير (Expert) | ExpertDashboard  | Case management, AI tools, document drafting       |
 
 ### Design System
+
 ```
 Colors:
   Primary (Navy):   #1B3A6B
@@ -226,6 +228,7 @@ case_documents        -- 🔲 planned (L3 only)
 > This section will be completed by the Backend Lead when the Django project is pushed to `backend/`.
 
 ### Expected Structure
+
 ```text
 backend/
 ├── manage.py
@@ -242,6 +245,7 @@ backend/
 │ └── models.py
 └── README.md
 ```
+
 ### Expected API Endpoints
 
 POST /api/chat/ ← Send message, get AI response
@@ -285,6 +289,7 @@ Response with Citations
 (article number + law name)
 
 ### Expected Folder Structure
+
 ```text
 ai/
 ├── requirements.txt
@@ -298,6 +303,7 @@ ai/
 │ └── laws/ ← Moroccan law documents (PDF/text)
 └── README.md
 ```
+
 ---
 
 ## 7. CI/CD Pipeline 🔲 _(Planned)_
@@ -330,6 +336,7 @@ jobs:
 ---
 
 ## 8. Environment Variables
+
 ```text
 ### frontend/.env.local
 
@@ -352,6 +359,7 @@ PINECONE_API_KEY=
 PINECONE_INDEX=haqqi-legal
 PINECONE_ENVIRONMENT=
 ```
+
 ---
 
 ## 9. Team Responsibilities

@@ -25,6 +25,43 @@ import AppShell from './components/AppShell';
 
 type ProfileState = Profile | null | 'loading';
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#F7F8FA] p-8" dir="rtl">
+          <div className="bg-white border border-[#E5E7EB] rounded-3xl p-10 max-w-md w-full text-center shadow-sm">
+            <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">⚠️</span>
+            </div>
+            <h2 className="text-lg font-bold text-[#1F2937] mb-2">حدث خطأ غير متوقع</h2>
+            <p className="text-sm text-[#6B7280] mb-6 leading-relaxed">
+              {this.state.error?.message || 'خطأ غير معروف'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full bg-[#1B3A6B] text-white py-3 rounded-xl font-bold text-sm hover:bg-[#2D4E87] transition-colors"
+            >
+              إعادة تحميل الصفحة
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F7F8FA]">
@@ -136,9 +173,10 @@ export default function App() {
 
   const realProfile = profile !== 'loading' ? profile as Profile | null : null;
 
-  console.log('App Rendering — Current Path:', window.location.pathname);
+
 
   return (
+    <ErrorBoundary>
     <Router>
       <Routes>
         <Route path="/"              element={<RootRoute session={session} profile={profile}><LandingScreen /></RootRoute>} />
@@ -162,5 +200,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
+    </ErrorBoundary>
   );
 }

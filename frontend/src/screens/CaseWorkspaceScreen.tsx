@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Scale, 
-  FolderOpen, 
-  ChevronLeft, 
-  Paperclip, 
-  FileText, 
-  Plus, 
-  X, 
+import {
+  Scale,
+  FolderOpen,
+  ChevronLeft,
+  Paperclip,
+  FileText,
+  Plus,
+  X,
   Lock,
   Calendar,
   Send,
   MoreVertical,
   Circle,
   CheckCircle,
+  Loader,
   Pencil,
   Trash2,
   Clock,
@@ -22,6 +23,8 @@ import {
 } from 'lucide-react';
 import { Profile, Case, Message, Conversation } from '../types';
 import { supabase } from '../utils/supabase/client';
+
+const BRIDGE_URL = import.meta.env.VITE_BRIDGE_URL || 'http://localhost:8000';
 
 interface CaseWorkspaceScreenProps {
   profile: Profile | null;
@@ -44,7 +47,15 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [isStarred, setIsStarred] = useState(false);
-  
+  const [pdfTexts, setPdfTexts] = useState<Record<string, string>>({});
+  const [isTypingSteps, setIsTypingSteps] = useState(0);
+
+  const REASONING_STEPS = [
+    'جارٍ تحليل ملف القضية',
+    'مراجعة القانون المغربي المعمول به',
+    'صياغة الرأي القانوني',
+  ];
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +115,29 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
     scrollToBottom();
   }, [chatMessages, isTyping]);
 
+  const extractPdfText = async (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const pdfjsLib = await import('pdfjs-dist');
+          pdfjsLib.GlobalWorkerOptions.workerSrc =
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const typedArray = new Uint8Array(e.target?.result as ArrayBuffer);
+          const pdf = await pdfjsLib.getDocument(typedArray).promise;
+          let text = '';
+          for (let i = 1; i <= Math.min(pdf.numPages, 15); i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map((it: any) => it.str).join(' ') + '\n';
+          }
+          resolve(text.slice(0, 10000));
+        } catch { resolve(''); }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   async function handleSend() {
     if (!message.trim()) return;
     const { data: { user } } = await supabase.auth.getUser();
@@ -121,7 +155,6 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
         })
         .select()
         .single();
-      
       if (error) return;
       convId = conv.id;
       setConversationId(convId);
@@ -129,33 +162,88 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
 
     const { data: savedMsg } = await supabase
       .from('messages')
-      .insert({
-        conversation_id: convId,
-        role: 'user',
-        content: message,
-      })
+      .insert({ conversation_id: convId, role: 'user', content: message })
       .select()
       .single();
 
     if (savedMsg) setChatMessages(prev => [...prev, savedMsg]);
     setMessage('');
     setIsTyping(true);
+    setIsTypingSteps(0);
 
-    setTimeout(async () => {
-      const aiResponse = 'لقد استلمت رسالتك. أنا بصدد تحليل المعلومات وسأوافيك بالرد القانوني الأنسب قريباً.';
+    const stepInterval = setInterval(() => {
+      setIsTypingSteps(prev => {
+        if (prev < REASONING_STEPS.length - 1) return prev + 1;
+        clearInterval(stepInterval);
+        return prev;
+      });
+    }, 1200);
+
+    const pdfContext = Object.entries(pdfTexts)
+      .map(([name, text]) => `--- ${name} ---\n${text}`)
+      .join('\n\n')
+      .slice(0, 10000);
+
+    const history = chatMessages.slice(-8).map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    try {
+      const response = await fetch(`${BRIDGE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: message,
+          history,
+          legal_level: 'expert',
+          domain: null,
+          conversation_id: convId,
+          pdf_context: pdfContext || null,
+          pdf_filename: files.length > 0
+            ? files.map(f => f.name).join(', ')
+            : null,
+          case_context: {
+            title: caseData?.title,
+            client_name: caseData?.client_name,
+            category: caseData?.category,
+            instructions: instructions,
+          },
+        }),
+      });
+
+      clearInterval(stepInterval);
+
+      const data = await response.json();
       const { data: aiMsg } = await supabase
         .from('messages')
         .insert({
           conversation_id: convId as string,
           role: 'assistant',
-          content: aiResponse,
+          content: data.reply,
+          sources: data.sources ?? null,
         })
         .select()
         .single();
 
       if (aiMsg) setChatMessages(prev => [...prev, aiMsg]);
+
+    } catch (error) {
+      clearInterval(stepInterval);
+      const { data: errMsg } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: convId as string,
+          role: 'assistant',
+          content: 'خطأ في الاتصال بالخادم. تأكد أن bridge.py شغال على المنفذ 8000.',
+          sources: null,
+        })
+        .select()
+        .single();
+      if (errMsg) setChatMessages(prev => [...prev, errMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   }
 
   if (loading) {
@@ -304,6 +392,16 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
                   <span className="px-5 py-1.5 bg-white text-[#6B7280] text-[11px] font-black rounded-xl border border-[#E5E7EB]">الموكل: {caseData.client_name}</span>
                 </div>
                 <p className="text-base text-[#6B7280] max-w-sm font-bold leading-relaxed opacity-60">أنا هنا لمساعدتك في تحليل الملف، تلخيص المذكرات، أو تقديم استشارات قانونية دقيقة.</p>
+                {files.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setMessage(`حلل لي وثائق القضية: ${files.map(f => f.name).join('، ')}`);
+                    }}
+                    className="mt-4 px-6 py-2.5 bg-[#E8EEF7] text-[#1B3A6B] text-xs font-bold rounded-2xl hover:bg-[#1B3A6B] hover:text-white transition-all"
+                  >
+                    تحليل الملفات المرفقة ←
+                  </button>
+                )}
               </div>
             ) : (
               <>
@@ -316,10 +414,26 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
                 ))}
                 {isTyping && (
                   <div className="flex justify-end w-full">
-                    <div className="bg-[#F7F8FA] border border-[#E5E7EB] rounded-[2rem] rounded-tl-none p-5 shadow-sm flex items-center gap-3">
-                      <div className="w-2 h-2 bg-[#1B3A6B] rounded-full animate-bounce [animation-delay:0s]" />
-                      <div className="w-2 h-2 bg-[#1B3A6B] rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <div className="w-2 h-2 bg-[#1B3A6B] rounded-full animate-bounce [animation-delay:0.4s]" />
+                    <div className="bg-[#F7F8FA] border border-[#E5E7EB] rounded-[2rem] rounded-tl-none p-5 shadow-sm min-w-[220px]">
+                      <div className="space-y-2.5">
+                        {REASONING_STEPS.map((step, idx) => (
+                          <div
+                            key={idx}
+                            className={`flex items-center gap-2 text-xs transition-all ${
+                              idx <= isTypingSteps ? 'text-[#1B3A6B]' : 'text-[#9CA3AF]'
+                            }`}
+                          >
+                            {idx < isTypingSteps
+                              ? <CheckCircle size={13} className="text-green-500 flex-shrink-0" />
+                              : idx === isTypingSteps
+                              ? <Loader size={13} className="animate-spin flex-shrink-0" />
+                              : <Circle size={13} className="flex-shrink-0" />}
+                            <span className={idx === isTypingSteps ? 'font-bold' : ''}>
+                              {step}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -409,7 +523,16 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
                  <span className="text-sm font-black text-[#1F2937]">الملفات</span>
                  <button onClick={() => fileInputRef.current?.click()} className="p-2 border border-[#E5E7EB] rounded-2xl text-[#1B3A6B] hover:bg-[#E8EEF7] transition-all shadow-sm" title="إضافة ملف"><Plus size={16} /></button>
                </div>
-               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => setFiles(p => [...p, ...Array.from(e.target.files || [])])} title="رفع ملف" />
+               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={async (e) => {
+    const newFiles = Array.from(e.target.files || []);
+    setFiles(p => [...p, ...newFiles]);
+    for (const file of newFiles) {
+      if (file.type.includes('pdf')) {
+        const text = await extractPdfText(file);
+        setPdfTexts(prev => ({ ...prev, [file.name]: text }));
+      }
+    }
+  }} title="رفع ملف" />
                {files.length === 0 ? (
                  <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-[#E5E7EB] rounded-[2rem] p-8 text-center cursor-pointer hover:border-[#1B3A6B]/40 hover:bg-[#F7F8FA] transition-all group">
                    <Plus size={24} className="mx-auto mb-2 text-[#9CA3AF]" />
@@ -421,6 +544,9 @@ export default function CaseWorkspaceScreen({ profile }: CaseWorkspaceScreenProp
                       <div key={i} className="flex items-center justify-between bg-[#F7F8FA] p-4 rounded-[1.5rem] border border-[#E5E7EB]">
                         <button onClick={() => setFiles(p => p.filter((_, j) => j !== i))} className="p-1 px-2 hover:bg-red-50 rounded-lg text-red-300 transition-colors" title="حذف الملف" aria-label="حذف الملف"><X size={16} /></button>
                         <p className="text-[11px] font-black text-[#1F2937] truncate flex-1 px-2">{file.name}</p>
+                        {pdfTexts[file.name] && (
+                          <span className="text-[9px] text-green-600 font-bold mr-1">✓ محلل</span>
+                        )}
                         <FileText size={18} className="text-[#1B3A6B]" />
                       </div>
                    ))}
