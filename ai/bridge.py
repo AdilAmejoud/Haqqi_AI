@@ -241,20 +241,21 @@ async def generate_document(req: DocumentRequest):
 
 class SummarizeLawRequest(BaseModel):
     title: str
-    law_number: str = ""
-    category: str = ""
-    description: str = ""
-    tags: list[str] = []
+    law_number: str | None = None
+    category: str | None = None
+    description: str | None = None
+    tags: list[str] | None = []
 
 @app.post("/summarize-law")
 async def summarize_law(req: SummarizeLawRequest):
+    tags_str = ', '.join(req.tags) if req.tags else ''
     prompt = f"""لخص هاد القانون المغربي بالدارجة في 5-7 جمل مفيدة للمواطن العادي:
 
 العنوان: {req.title}
-الرقم: {req.law_number}
-التصنيف: {req.category}
-الوصف: {req.description}
-الكلمات المفتاحية: {', '.join(req.tags)}
+الرقم: {req.law_number or 'غير محدد'}
+التصنيف: {req.category or 'غير محدد'}
+الوصف: {req.description or 'غير محدد'}
+الكلمات المفتاحية: {tags_str}
 
 قواعد الملخص:
 - بالدارجة المغربية فقط
@@ -264,11 +265,15 @@ async def summarize_law(req: SummarizeLawRequest):
 - جملة أخيرة: "إذا كنت محتاج أكثر معلومات، اضغط استشر حقي"
 """
 
-    response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=prompt
-    )
-    return {"summary": response.text}
+    try:
+        response = client.models.generate_content(
+            model="gemini-flash-lite-latest",
+            contents=prompt
+        )
+        return {"summary": response.text}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/domains")
