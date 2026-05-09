@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { path: '/cases',      label: 'القضايا',      icon: ClipboardList },
   { path: '/chats',      label: 'المحادثات',    icon: MessageSquare },
   { path: '/library',    label: 'المكتبة',      icon: Library },
-  { path: '/document',   label: 'المستندات',    icon: FileText },
+  { path: '/documents',  label: 'المستندات',    icon: FileText },
   { path: '/procedures', label: 'المساطر الإدارية', icon: Scale },
   { path: '/community',  label: 'منتدى المجتمع', icon: Users },
   { path: '/settings',   label: 'الإعدادات',    icon: Settings },
@@ -72,7 +72,8 @@ export default function Sidebar({ isOpen, setIsOpen, profile }: SidebarProps) {
                 to={item.path}
                 className={({ isActive }) => {
                   const isChatActive = item.path === '/chats' && (window.location.pathname === '/chats' || window.location.pathname === '/chat');
-                  const reallyActive = isActive || isChatActive;
+                  const isDocActive = item.path === '/documents' && window.location.pathname.startsWith('/documents');
+                  const reallyActive = isActive || isChatActive || isDocActive;
                   return `
                     flex items-center gap-3 px-4 py-3 rounded-xl transition-all
                     ${reallyActive

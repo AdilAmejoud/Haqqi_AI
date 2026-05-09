@@ -15,6 +15,9 @@ import LibraryScreen from './screens/LibraryScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ProceduresScreen from './screens/ProceduresScreen';
 import DocumentScreen from './screens/DocumentScreen';
+import DocumentsHubScreen from './screens/DocumentsHubScreen';
+import SavedDocumentsScreen from './screens/SavedDocumentsScreen';
+import TemplatesScreen from './screens/TemplatesScreen';
 import CommunityScreen from './screens/CommunityScreen';
 import NewCaseScreen from './screens/NewCaseScreen';
 import EditCaseScreen from './screens/EditCaseScreen';
@@ -194,7 +197,11 @@ export default function App() {
         <Route path="/library"    element={<Shell session={session} profile={profile} realProfile={realProfile}><LibraryScreen   profile={realProfile} /></Shell>} />
         <Route path="/settings"   element={<Shell session={session} profile={profile} realProfile={realProfile}><SettingsScreen  profile={realProfile} /></Shell>} />
         <Route path="/procedures" element={<Shell session={session} profile={profile} realProfile={realProfile}><ProceduresScreen profile={realProfile} /></Shell>} />
-        <Route path="/document"   element={<Shell session={session} profile={profile} realProfile={realProfile}><DocumentScreen  profile={realProfile} /></Shell>} />
+        <Route path="/documents" element={<Shell session={session} profile={profile} realProfile={realProfile}><DocumentsHubScreen profile={realProfile} /></Shell>} />
+        <Route path="/documents/generate" element={<Shell session={session} profile={profile} realProfile={realProfile}><DocumentScreen profile={realProfile} /></Shell>} />
+        <Route path="/documents/saved" element={<Shell session={session} profile={profile} realProfile={realProfile}><SavedDocumentsScreen profile={realProfile} /></Shell>} />
+        <Route path="/documents/templates" element={<Shell session={session} profile={profile} realProfile={realProfile}><TemplatesScreen profile={realProfile} /></Shell>} />
+        <Route path="/document" element={<Navigate to="/documents" replace />} />
         <Route path="/community"  element={<Shell session={session} profile={profile} realProfile={realProfile}><CommunityScreen profile={realProfile} /></Shell>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />

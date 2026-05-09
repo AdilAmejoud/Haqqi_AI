@@ -11,6 +11,7 @@ import {
   Scale
 } from 'lucide-react';
 import { Profile } from '../types';
+import { supabase } from '../utils/supabase/client';
 
 interface DocumentScreenProps {
   profile: Profile | null;
@@ -325,7 +326,7 @@ export default function DocumentScreen({ profile }: DocumentScreenProps) {
       
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-[#E8EEF7] rounded-full text-[#6B7280] transition-colors">
+        <button onClick={() => navigate('/documents')} className="p-2 hover:bg-[#E8EEF7] rounded-full text-[#6B7280] transition-colors">
           <ArrowRight size={22} />
         </button>
         <div>
@@ -442,6 +443,22 @@ export default function DocumentScreen({ profile }: DocumentScreenProps) {
                     const data = await response.json();
                     setGeneratedContent(data.document);
                     setIsGenerated(true);
+
+                    try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (user) {
+                        await supabase.from('documents').insert({
+                          user_id: user.id,
+                          title: activeDoc?.label ?? activeTab,
+                          type: activeDoc?.category ?? '',
+                          content: data.document,
+                          file_path: null,
+                        });
+                      }
+                    } catch (saveError) {
+                      console.error('Save error:', saveError);
+                      // Silent fail — document still shown even if save fails
+                    }
                   } catch (error) {
                     console.error('Document generation error:', error);
                     alert('خطأ في توليد المستند. تأكد أن الخادم شغال على المنفذ 8000.');
