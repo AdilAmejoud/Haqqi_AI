@@ -7,6 +7,12 @@ coverage/
 .env*
 !.env.example
 .claude-rules.md
-claude-rules.md
-CLAUDE.md
 
+venv/
+__pycache__/
+*.pyc
+ai/data/
+ai/.claude/
+laws_scraped.json
+.venv/
+sql_chunks/
